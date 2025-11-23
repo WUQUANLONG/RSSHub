@@ -54,6 +54,32 @@ export const route: Route = {
     ],
 };
 
+// 辅助函数：移除推文中的 user 字段
+function removeUserFromTweets(tweets) {
+    if (!tweets || !Array.isArray(tweets)) {
+        return [];
+    }
+
+    return tweets.map(tweet => {
+        // 使用 JSON 方法进行深拷贝
+        const tweetCopy = JSON.parse(JSON.stringify(tweet));
+
+        // 移除 user 字段
+        delete tweetCopy.user;
+
+        // 可选：保留一些有用的用户基本信息
+        // 如果需要用户ID，可以单独保留
+        if (tweet.user_id_str) {
+            tweetCopy.author_id = tweet.user_id_str;
+        }
+        if (tweet.user?.screen_name) {
+            tweetCopy.author_username = tweet.user.screen_name;
+        }
+
+        return tweetCopy;
+    });
+}
+
 async function handler(ctx) {
     const id = ctx.req.param('id');
 
@@ -75,16 +101,39 @@ async function handler(ctx) {
 
     const profileImageUrl = userInfo?.profile_image_url || userInfo?.profile_image_url_https;
 
+    console.log('返回数据量:', data?.length || 0);
+
+    // 移除 user 字段
+    const dataWithoutUser = removeUserFromTweets(data);
+
+    // 处理 RSS 项目
+    const feedItems = data ? utils.ProcessFeed(ctx, { data }) : [];
+
+    // 添加处理后的数据到描述中
+    if (feedItems.length > 0 && dataWithoutUser) {
+        feedItems.forEach((item, index) => {
+            const tweetData = dataWithoutUser[index];
+            if (tweetData) {
+                const originalDescription = item.description || '';
+                const rawDataHtml = `
+<div style="display: none;" class="raw-tweet-data">
+<!-- 处理后的推文数据（不含用户信息） -->
+${JSON.stringify(tweetData, null, 2)}
+</div>
+${originalDescription}
+                `.trim();
+
+                item.description = rawDataHtml;
+            }
+        });
+    }
+
     return {
         title: `Twitter @${userInfo?.name}`,
         link: `https://x.com/${userInfo?.screen_name}`,
-        image: profileImageUrl.replace(/_normal.jpg$/, '.jpg'),
+        image: profileImageUrl?.replace(/_normal.jpg$/, '.jpg'),
         description: userInfo?.description,
-        item:
-            data &&
-            utils.ProcessFeed(ctx, {
-                data,
-            }),
+        item: feedItems,
         allowEmpty: true,
     };
 }
