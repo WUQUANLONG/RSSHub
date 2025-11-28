@@ -50,10 +50,7 @@ export const route: Route = {
     path: '/industry/list',
     categories: ['finance'],
     example: '/jiuyangongshe/industry/list',
-    parameters: {
-        limit: '返回数量，默认为30',
-        start: '起始位置，默认为1',
-    },
+    parameters: {},
     features: {
         requireConfig: false,
         requirePuppeteer: false,
@@ -140,8 +137,12 @@ function generateItemDescription(item: ResultItem): string {
     // 添加标题
     if (item.title) {
         const titleStyle = [];
-        if (item.title_red === 1) {titleStyle.push('color: red;');}
-        if (item.title_bold === 1) {titleStyle.push('font-weight: bold;');}
+        if (item.title_red === 1) {
+            titleStyle.push('color: red;');
+        }
+        if (item.title_bold === 1) {
+            titleStyle.push('font-weight: bold;');
+        }
 
         const styleAttr = titleStyle.length > 0 ? ` style="${titleStyle.join(' ')}"` : '';
         descriptionParts.push(`<h3${styleAttr}>${item.title}</h3>`);
@@ -181,8 +182,12 @@ function generateItemDescription(item: ResultItem): string {
 
     // 添加统计信息
     const stats = [];
-    if (item.forward_count) {stats.push(`转发: ${item.forward_count}`);}
-    if (item.browsers_count) {stats.push(`浏览: ${item.browsers_count}`);}
+    if (item.forward_count) {
+        stats.push(`转发: ${item.forward_count}`);
+    }
+    if (item.browsers_count) {
+        stats.push(`浏览: ${item.browsers_count}`);
+    }
     if (stats.length > 0) {
         descriptionParts.push(`<p><small>${stats.join(' | ')}</small></p>`);
     }
