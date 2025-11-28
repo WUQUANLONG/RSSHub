@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Install pnpm and set up npm registry if using China mirror
 ARG USE_CHINA_NPM_REGISTRY=0
+ARG INCLUDE_YOUTUBEI=false
+
 RUN \
     set -ex && \
     corepack enable pnpm && \
@@ -23,17 +25,35 @@ COPY ./package.json /app/
 RUN \
     set -ex && \
     export PUPPETEER_SKIP_DOWNLOAD=true && \
+    # 先更新 lockfile 确保一致性
+    pnpm install --lockfile-only || true && \
     pnpm install --frozen-lockfile && \
+    # 根据参数决定是否安装 youtubei.js
+    if [ "$INCLUDE_YOUTUBEI" = "true" ]; then \
+        echo "Installing youtubei.js for international version" && \
+        pnpm add youtubei.js; \
+    else \
+        echo "Skipping youtubei.js for China version"; \
+    fi && \
     pnpm rb
 
 # Copy source code and build the project
 COPY . /app
-RUN pnpm build
+
+# 构建时根据版本处理 YouTube 路由
+RUN if [ "$INCLUDE_YOUTUBEI" = "true" ]; then \
+        echo "Building with YouTube support" && \
+        pnpm build; \
+    else \
+        echo "Building without YouTube support" && \
+        # 设置环境变量让构建过程知道要跳过 YouTube
+        SKIP_YOUTUBE_ROUTES=true pnpm build; \
+    fi
 
 # Stage 2: Final production stage
 FROM node:22-bookworm-slim AS final
 
-LABEL org.opencontainers.image.authors="https://github.com/DIYgod/RSSHub"
+LABEL org.opencontainers.image.authors="wuquanlong@licaimofang.com"
 
 ENV NODE_ENV=production
 ENV TZ=Asia/Shanghai

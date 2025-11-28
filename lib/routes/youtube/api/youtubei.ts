@@ -1,20 +1,21 @@
 import { Data } from '@/types';
 import cache from '@/utils/cache';
 import { parseRelativeDate } from '@/utils/parse-date';
-import { Innertube } from 'youtubei.js';
+// import { Innertube } from 'youtubei.js';
 import utils, { getVideoUrl } from '../utils';
 import { getSrtAttachmentBatch } from './subtitles';
 
-const innertubePromise = Innertube.create({
-    fetch: (input, init) => {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-
-        return fetch(url, {
-            method: input?.method,
-            ...init,
-        });
-    },
-});
+// const innertubePromise = Innertube.create({
+//    fetch: (input, init) => {
+//        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+//
+//        return fetch(url, {
+//            method: input?.method,
+//            ...init,
+//        });
+//    },
+// });
+const innertubePromise = {};
 
 export const getChannelIdByUsername = (username: string) =>
     cache.tryGet(`youtube:getChannelIdByUsername:${username}`, async () => {
