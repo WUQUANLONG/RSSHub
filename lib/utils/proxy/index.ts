@@ -4,12 +4,32 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { ProxyAgent } from 'undici';
 import logger from '@/utils/logger';
+import { DynamicProxy } from './dynamic-proxy';
+import cache from '@/utils/cache';
 
 const proxyIsPAC = config.pacUri || config.pacScript;
 
 import pacProxy from './pac-proxy';
 import unifyProxy from './unify-proxy';
 import createMultiProxy, { type MultiProxyResult, type ProxyState } from './multi-proxy';
+
+// Declare agent and dispatcher first
+let agent: PacProxyAgent<string> | HttpsProxyAgent<string> | SocksProxyAgent | null = null;
+let dispatcher: ProxyAgent | null = null;
+
+// Dynamic proxy will be initialized asynchronously
+let dynamicProxyPromise: Promise<DynamicProxy | null> | null = null;
+
+let dynamicProxyInstance: DynamicProxy | null = null;
+
+if (config.proxyService.host && config.proxyService.key) {
+    // Initialize dynamicProxyInstance without immediately creating the promise
+    dynamicProxyInstance = new DynamicProxy(cache, logger);
+    logger.info('Dynamic proxy service initialized');
+}
+
+// dynamicProxyPromise will be set on-demand when needed
+// dynamicProxyPromise = dynamicProxyInitPromise;
 
 interface ProxyExport {
     agent: PacProxyAgent<string> | HttpsProxyAgent<string> | SocksProxyAgent | null;
@@ -22,6 +42,7 @@ interface ProxyExport {
     markProxyFailed: (proxyUri: string) => void;
     getAgentForProxy: (proxyState: ProxyState) => any;
     getDispatcherForProxy: (proxyState: ProxyState) => ProxyAgent | null;
+    dynamicProxyPromise?: Promise<DynamicProxy | null> | null;
 }
 
 let proxyUri: string | undefined;
@@ -55,36 +76,73 @@ const createDispatcherForProxy = (uri: string, proxyObj: Record<string, any>): P
     return null;
 };
 
-if (proxyIsPAC) {
-    const proxy = pacProxy(config.pacUri, config.pacScript, config.proxy);
-    proxyUri = proxy.proxyUri;
-    proxyObj = proxy.proxyObj;
-    proxyUrlHandler = proxy.proxyUrlHandler;
-} else if (config.proxyUris && config.proxyUris.length > 0) {
-    multiProxy = createMultiProxy(config.proxyUris, config.proxy);
-    proxyObj = multiProxy.proxyObj;
-    const currentProxy = multiProxy.getNextProxy();
-    if (currentProxy) {
-        proxyUri = currentProxy.uri;
-        proxyUrlHandler = currentProxy.urlHandler;
+// Initialize proxy configuration based on settings
+const initializeProxyConfig = async () => {
+    if (proxyIsPAC) {
+        const proxy = pacProxy(config.pacUri, config.pacScript, config.proxy);
+        return { proxyUri: proxy.proxyUri, proxyObj: proxy.proxyObj, proxyUrlHandler: proxy.proxyUrlHandler };
+    } else if (config.proxyUris && config.proxyUris.length > 0) {
+        multiProxy = createMultiProxy(config.proxyUris, config.proxy);
+        const currentProxy = multiProxy.getNextProxy();
+        if (currentProxy) {
+            logger.info(`Multi-proxy initialized with ${config.proxyUris.length} proxies`);
+            return {
+                proxyObj: multiProxy.proxyObj,
+                proxyUri: currentProxy.uri,
+                proxyUrlHandler: currentProxy.urlHandler,
+            };
+        }
+    } else if (dynamicProxyPromise) {
+        try {
+            // Create the dynamicProxyPromise on-demand when needed
+            if (!dynamicProxyPromise && dynamicProxyInstance) {
+                dynamicProxyPromise = Promise.resolve(dynamicProxyInstance);
+            }
+
+            if (dynamicProxyPromise) {
+                const dynamicProxy = await dynamicProxyPromise;
+                if (dynamicProxy) {
+                    // Get the proxy (this will check cache first, then fetch if needed)
+                    const dynamicProxyResult = await dynamicProxy.getProxy();
+                    if (dynamicProxyResult) {
+                        logger.info('Using dynamic proxy:', dynamicProxyResult.uri);
+                        return {
+                            proxyUri: dynamicProxyResult.uri,
+                            proxyObj: {
+                                ...config.proxy,
+                                protocol: 'http',
+                            },
+                            proxyUrlHandler: dynamicProxyResult.urlHandler,
+                        };
+                    } else {
+                        logger.error('Failed to obtain dynamic proxy from service');
+                    }
+                }
+            }
+        } catch (error) {
+            logger.error('Error getting dynamic proxy:', error);
+        }
     }
-    logger.info(`Multi-proxy initialized with ${config.proxyUris.length} proxies`);
-} else {
+
+    // Use static proxy configuration as fallback
     const proxy = unifyProxy(config.proxyUri, config.proxy);
-    proxyUri = proxy.proxyUri;
-    proxyObj = proxy.proxyObj;
-    proxyUrlHandler = proxy.proxyUrlHandler;
-}
+    return {
+        proxyUri: proxy.proxyUri,
+        proxyObj: proxy.proxyObj,
+        proxyUrlHandler: proxy.proxyUrlHandler,
+    };
+};
 
-let agent: PacProxyAgent<string> | HttpsProxyAgent<string> | SocksProxyAgent | null = null;
-let dispatcher: ProxyAgent | null = null;
-
-if (proxyIsPAC && proxyUri) {
-    agent = new PacProxyAgent(`pac+${proxyUri}`);
-} else if (proxyUri) {
-    agent = createAgentForProxy(proxyUri, proxyObj);
-    dispatcher = createDispatcherForProxy(proxyUri, proxyObj);
-}
+// Initialize the proxy configuration
+initializeProxyConfig().then((result) => {
+    if (result) {
+        ({ proxyUri, proxyObj, proxyUrlHandler } = result);
+        if (proxyUri) {
+            agent = createAgentForProxy(proxyUri, proxyObj);
+            dispatcher = createDispatcherForProxy(proxyUri, proxyObj);
+        }
+    }
+});
 
 const getCurrentProxy = (): ProxyState | null => {
     if (multiProxy) {
@@ -96,8 +154,22 @@ const getCurrentProxy = (): ProxyState | null => {
             isActive: true,
             failureCount: 0,
             urlHandler: proxyUrlHandler,
+            // Include a marker that this is a dynamic proxy
+            isDynamic: config.proxyService.host && config.proxyService.key ? true : undefined,
         };
     }
+
+    // If no static proxy is configured but dynamic proxy is available, return a placeholder
+    if (config.proxyService.host && config.proxyService.key) {
+        return {
+            uri: '',
+            isActive: false,
+            failureCount: 0,
+            urlHandler: null,
+            isDynamic: true,
+        };
+    }
+
     return null;
 };
 
@@ -117,6 +189,14 @@ const markProxyFailed = (failedProxyUri: string) => {
             dispatcher = null;
             proxyUri = undefined;
         }
+    } else if (config.proxyService.host && config.proxyService.key && failedProxyUri === proxyUri) {
+        // For dynamic proxies, clear the cache so we fetch a new one on next request
+        try {
+            cache.set(PROXY_CACHE_KEY, '', 1); // Set to expire immediately
+            logger.info('Cleared cached dynamic proxy after failure');
+        } catch (error) {
+            logger.error('Error clearing cached dynamic proxy:', error);
+        }
     }
 };
 
@@ -135,6 +215,17 @@ const proxyExport: ProxyExport = {
     markProxyFailed,
     getAgentForProxy,
     getDispatcherForProxy,
+    // Initialize dynamicProxyPromise on-demand when needed
+    // dynamicProxyPromise will be created in initializeProxyConfig when required
+    dynamicProxyPromise:
+        config.proxyService.host && config.proxyService.key
+            ? () => {
+                  if (!dynamicProxyPromise) {
+                      dynamicProxyPromise = Promise.resolve(dynamicProxyInstance);
+                  }
+                  return dynamicProxyPromise;
+              }
+            : undefined,
 };
 
 export default proxyExport;

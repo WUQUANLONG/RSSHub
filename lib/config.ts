@@ -49,6 +49,11 @@ export type Config = {
     };
     pacUri?: string;
     pacScript?: string;
+    // proxy service
+    proxyService: {
+        host: string;
+        key: string;
+    };
     // access control
     accessKey?: string;
     // logging
@@ -525,6 +530,11 @@ const calculateValue = () => {
         },
         pacUri: envs.PAC_URI,
         pacScript: envs.PAC_SCRIPT,
+        // proxy service
+        proxyService: {
+            host: envs.PROXY_SERVICE_HOST || 'https://share.proxy.qg.net',
+            key: envs.PROXY_SERVICE_KEY || '',
+        },
         // access control
         accessKey: envs.ACCESS_KEY,
         // logging
