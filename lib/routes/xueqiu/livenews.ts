@@ -141,7 +141,7 @@ async function handler(ctx) {
             link,
             pubDate,
             author: '雪球财经',
-            guid: `xueqiu-livenews-${item.id}`,
+            guid: item.id,
             id: item.id,
         };
     });
