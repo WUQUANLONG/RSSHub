@@ -3,6 +3,7 @@ import puppeteer, { Browser, Page } from 'rebrowser-puppeteer';
 import logger from './logger';
 import proxy from './proxy';
 import { anonymizeProxy } from 'proxy-chain';
+import { HttpsAgent as HttpAgent } from 'agentkeepalive';
 
 /**
  * @deprecated use getPage instead
@@ -25,18 +26,88 @@ const outPuppeteer = async () => {
 
     const insidePuppeteer: typeof puppeteer = puppeteer;
 
-    const currentProxy = proxy.getCurrentProxy();
-    if (currentProxy && proxy.proxyObj.url_regex === '.*') {
-        if (currentProxy.urlHandler?.username || currentProxy.urlHandler?.password) {
-            // only proxies with authentication need to be anonymized
-            if (currentProxy.urlHandler.protocol === 'http:') {
-                options.args.push(`--proxy-server=${await anonymizeProxy(currentProxy.uri)}`);
-            } else {
-                logger.warn('SOCKS/HTTPS proxy with authentication is not supported by puppeteer, continue without proxy');
+    // Check if we should use a proxy for this request
+    const shouldUseProxy = config.proxy.strategy === 'all';
+
+    let currentProxy = proxy.getCurrentProxy();
+
+    if (shouldUseProxy) {
+        logger.info('Puppeteer browser requires proxy, attempting to get proxy server');
+
+        // For dynamic proxies that are still initializing or need refresh
+        if (currentProxy?.isDynamic && !currentProxy.uri) {
+            // If we have a dynamic proxy function, call it to get the promise
+            if ((proxy as any).dynamicProxyPromise && typeof (proxy as any).dynamicProxyPromise === 'function') {
+                try {
+                    const dynamicProxyPromiseFunc = (proxy as any).dynamicProxyPromise;
+                    const dynamicProxy = await dynamicProxyPromiseFunc();
+                    if (dynamicProxy) {
+                        const dynamicProxyResult = await dynamicProxy.getProxy();
+                        if (dynamicProxyResult) {
+                            logger.info(`Using dynamic proxy: ${dynamicProxyResult.uri}`);
+                            currentProxy = {
+                                uri: dynamicProxyResult.uri,
+                                isActive: true,
+                                failureCount: 0,
+                                urlHandler: dynamicProxyResult.urlHandler,
+                                isDynamic: true,
+                            };
+                        }
+                    }
+                } catch (error) {
+                    logger.error('Error getting dynamic proxy:', error);
+                }
             }
-        } else {
-            // Chromium cannot recognize socks5h and socks4a, so we need to trim their postfixes
-            options.args.push(`--proxy-server=${currentProxy.uri.replace('socks5h://', 'socks5://').replace('socks4a://', 'socks4://')}`);
+
+            // If we still don't have a proxy, fail fast
+            if (!currentProxy?.uri) {
+                logger.error('Failed to obtain dynamic proxy server - aborting request');
+                throw new Error('Dynamic proxy server unavailable: failed to obtain proxy from service');
+            }
+        }
+
+        // For non-dynamic proxies, proceed as normal
+        if (currentProxy && currentProxy.uri) {
+            // Extract protocol from proxy URL
+            const protocol = currentProxy.uri.startsWith('https') ? 'https' : 'http';
+            const [host, port] = currentProxy.uri.replace(/^https?:\/\//, '').split(':');
+
+            // Handle proxy authentication
+            if (currentProxy.urlHandler?.username || currentProxy.urlHandler?.password) {
+                // Only HTTP proxies with authentication need to be anonymized
+                if (currentProxy.urlHandler.protocol === 'http:') {
+                    try {
+                        const anonymizedProxy = await anonymizeProxy(currentProxy.uri);
+                        options.args.push(`--proxy-server=${anonymizedProxy}`);
+
+                        logger.info(`Using anonymized proxy for puppeteer browser: ${anonymizedProxy}`);
+                    } catch (error) {
+                        logger.error('Failed to anonymize proxy:', error);
+                    }
+                } else {
+                    logger.warn('SOCKS/HTTPS proxy with authentication is not supported by puppeteer, continue without proxy');
+                }
+            } else {
+                // For proxies without authentication, set up using HttpAgent
+                try {
+                    const httpAgent = new HttpAgent({
+                        host,
+                        port: Number.parseInt(port),
+                        maxSockets: 50,
+                        maxFreeSockets: 10,
+                        timeout: 60000,
+                        freeSocketTimeout: 30000,
+                    });
+
+                    // Configure puppeteer to use the proxy
+                    options.args.push(`--proxy-server=${host}:${port}`);
+
+                    logger.info(`Using proxy ${currentProxy.uri} for puppeteer browser`);
+                    logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+                } catch (error) {
+                    logger.error('Failed to set up proxy for puppeteer browser:', error);
+                }
+            }
         }
     }
     const browser = await (config.puppeteerWSEndpoint
@@ -51,6 +122,25 @@ const outPuppeteer = async () => {
                     }
                   : options
           ));
+
+    // If we have authentication credentials, create a page and authenticate
+    if (currentProxy && currentProxy.urlHandler?.username && currentProxy.urlHandler?.password) {
+        try {
+            const page = await browser.newPage();
+            await page.authenticate({
+                username: currentProxy.urlHandler.username,
+                password: currentProxy.urlHandler.password,
+            });
+            logger.debug(`Authenticated with proxy ${currentProxy.uri}`);
+
+            // Close the page as it's just for authentication
+            await page.close();
+        } catch (authError) {
+            logger.error('Failed to authenticate with proxy:', authError);
+            // Don't throw here as we want to continue with the browser instance
+        }
+    }
+
     setTimeout(async () => {
         await browser.close();
     }, 30000);
@@ -71,6 +161,7 @@ export const getPuppeteerPage = async (
             waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
         };
         noGoto?: boolean;
+        retryCount?: number;
     } = {}
 ) => {
     const options = {
@@ -89,39 +180,78 @@ export const getPuppeteerPage = async (
 
     const insidePuppeteer: typeof puppeteer = puppeteer;
 
-    let allowProxy = false;
-    const proxyRegex = new RegExp(proxy.proxyObj.url_regex);
-    let urlHandler;
-    try {
-        urlHandler = new URL(url);
-    } catch {
-        // ignore
-    }
-
-    if (proxyRegex.test(url) && url.startsWith('http') && !(urlHandler && urlHandler.host === proxy.proxyUrlHandler?.host)) {
-        allowProxy = true;
-    }
+    // Check if we should use a proxy for this request
+    const shouldUseProxy = config.proxy.strategy === 'all' ||
+                           instanceOptions.retryCount > 0 ||
+                           (instanceOptions.headers && (instanceOptions.headers as Record<string, string>)['x-prefer-proxy'] === '1');
 
     let hasProxy = false;
     let currentProxyState: any = null;
-    const currentProxy = proxy.getCurrentProxy();
-    if (currentProxy && allowProxy) {
-        currentProxyState = currentProxy;
-        if (currentProxy.urlHandler?.username || currentProxy.urlHandler?.password) {
-            // only proxies with authentication need to be anonymized
-            if (currentProxy.urlHandler.protocol === 'http:') {
-                const urlObj = new URL(currentProxy.uri);
-                urlObj.username = '';
-                urlObj.password = '';
-                options.args.push(`--proxy-server=${urlObj.toString().replace(/\/$/, '')}`);
-                hasProxy = true;
-            } else {
-                logger.warn('SOCKS/HTTPS proxy with authentication is not supported by puppeteer, continue without proxy');
+    let currentProxy = proxy.getCurrentProxy();
+
+    if (shouldUseProxy) {
+        logger.info('Puppeteer request requires proxy, attempting to get proxy server');
+
+        // For dynamic proxies that are still initializing or need refresh
+        if (currentProxy?.isDynamic && !currentProxy.uri) {
+            // If we have a dynamic proxy function, call it to get the promise
+            if ((proxy as any).dynamicProxyPromise && typeof (proxy as any).dynamicProxyPromise === 'function') {
+                try {
+                    const dynamicProxyPromiseFunc = (proxy as any).dynamicProxyPromise;
+                    const dynamicProxy = await dynamicProxyPromiseFunc();
+                    if (dynamicProxy) {
+                        const dynamicProxyResult = await dynamicProxy.getProxy();
+                        if (dynamicProxyResult) {
+                            logger.info(`Using dynamic proxy: ${dynamicProxyResult.uri}`);
+                            currentProxy = {
+                                uri: dynamicProxyResult.uri,
+                                isActive: true,
+                                failureCount: 0,
+                                urlHandler: dynamicProxyResult.urlHandler,
+                                isDynamic: true,
+                            };
+                        }
+                    }
+                } catch (error) {
+                    logger.error('Error getting dynamic proxy:', error);
+                }
             }
-        } else {
-            // Chromium cannot recognize socks5h and socks4a, so we need to trim their postfixes
-            options.args.push(`--proxy-server=${currentProxy.uri.replace('socks5h://', 'socks5://').replace('socks4a://', 'socks4://')}`);
+
+            // If we still don't have a proxy, fail fast
+            if (!currentProxy?.uri) {
+                logger.error('Failed to obtain dynamic proxy server - aborting request');
+                throw new Error('Dynamic proxy server unavailable: failed to obtain proxy from service');
+            }
+        }
+
+        // For non-dynamic proxies, proceed as normal
+        if (currentProxy && currentProxy.uri) {
+            currentProxyState = currentProxy;
             hasProxy = true;
+
+            // Extract protocol from proxy URL
+            const protocol = currentProxy.uri.startsWith('https') ? 'https' : 'http';
+            const [host, port] = currentProxy.uri.replace(/^https?:\/\//, '').split(':');
+
+            // Set up proxy configuration using HttpAgent
+            try {
+                const httpAgent = new HttpAgent({
+                    host,
+                    port: Number.parseInt(port),
+                    maxSockets: 50,
+                    maxFreeSockets: 10,
+                    timeout: 60000,
+                    freeSocketTimeout: 30000,
+                });
+
+                // Configure puppeteer to use the proxy
+                options.args.push(`--proxy-server=${host}:${port}`);
+
+                logger.info(`Using proxy ${currentProxy.uri} for puppeteer request ${url}`);
+                logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+            } catch (error) {
+                logger.error('Failed to set up proxy for puppeteer request:', error);
+            }
         }
     }
     let browser: Browser;
@@ -169,9 +299,21 @@ export const getPuppeteerPage = async (
         try {
             await page.goto(url, instanceOptions.gotoConfig || { waitUntil: 'domcontentloaded' });
         } catch (error) {
-            if (hasProxy && currentProxyState && proxy.multiProxy) {
+            // Handle proxy-related errors
+            if (hasProxy && currentProxyState) {
                 logger.warn(`Puppeteer navigation failed with proxy ${currentProxyState.uri}, marking as failed: ${error}`);
-                proxy.markProxyFailed(currentProxyState.uri);
+
+                // Mark the proxy as failed if we're using multiProxy mode
+                if (proxy.multiProxy) {
+                    proxy.markProxyFailed(currentProxyState.uri);
+                }
+
+                // If this was a retry attempt, don't retry again
+                if (instanceOptions.retryCount && instanceOptions.retryCount > 0) {
+                    throw error;
+                }
+
+                // For non-retry attempts, re-throw to allow caller to retry if needed
                 throw error;
             }
             throw error;

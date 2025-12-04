@@ -1,7 +1,7 @@
 import { Route } from '@/types';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
-import puppeteer from 'puppeteer';
+import { getPuppeteerPage } from '@/utils/puppeteer';
 import cache from '@/utils/cache';
 import logger from '@/utils/logger';
 
@@ -169,29 +169,17 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
     return await cache.tryGet(
         'xueqiu:puppeteer_data',
         async () => {
-            let browser;
             try {
-                // 启动 Puppeteer - 兼容旧版本配置
-                browser = await puppeteer.launch({
-                    headless: true, // 使用传统的无头模式
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--disable-web-security',
-                        '--window-size=1920,1080',
-                    ],
+                // 使用封装的 getPuppeteerPage 函数，它会自动处理代理
+                const { page, destroy } = await getPuppeteerPage('https://xueqiu.com', {
+                    gotoConfig: {
+                        waitUntil: 'domcontentloaded'
+                    }
                 });
 
-                const page = await browser.newPage();
-
-                // 设置 User-Agent
+                // 设置 User-Agent（如果需要覆盖默认值）
                 const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
                 await page.setUserAgent(userAgent);
-
-                // 设置视口大小
-                await page.setViewport({ width: 1920, height: 1080 });
 
                 // 设置额外的头信息
                 await page.setExtraHTTPHeaders({
@@ -203,12 +191,6 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
                 });
 
                 logger.info('正在访问雪球首页，执行 JavaScript 挑战...');
-
-                // 访问雪球首页 - 使用更兼容的等待策略
-                await page.goto('https://xueqiu.com', {
-                    waitUntil: 'domcontentloaded', // 使用更快的等待条件
-                    timeout: 30000,
-                });
 
                 // 等待页面加载 - 使用 setTimeout 替代 waitForTimeout
                 await new Promise(resolve => setTimeout(resolve, 3000));
@@ -276,11 +258,14 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
                 };
 
             } catch (error) {
-                console.error('Puppeteer 执行失败:', error);
+                logger.error('Puppeteer 执行失败:', error);
                 throw error;
             } finally {
-                if (browser) {
-                    await browser.close();
+                // 使用 getPuppeteerPage 返回的 destroy 函数来正确清理资源
+                try {
+                    await destroy();
+                } catch (cleanupError) {
+                    logger.warn('清理 Puppeteer 资源时出错:', cleanupError);
                 }
             }
         },

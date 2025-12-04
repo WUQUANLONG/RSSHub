@@ -1,84 +1,71 @@
-FROM node:22-bookworm AS build
+# Dockerfile
+# 阶段1：构建应用
+FROM node:22-bookworm AS builder
 
 WORKDIR /app
 
-# Install pnpm and set up npm registry if using China mirror
-ARG USE_CHINA_NPM_REGISTRY=0
-ARG INCLUDE_YOUTUBEI=false
+# 启用 pnpm
+RUN corepack enable pnpm
 
-RUN \
-    set -ex && \
-    corepack enable pnpm && \
-    if [ "$USE_CHINA_NPM_REGISTRY" = 1 ]; then \
-        echo 'use npm mirror' && \
-        npm config set registry https://registry.npmmirror.com && \
-        yarn config set registry https://registry.npmmirror.com && \
-        pnpm config set registry https://registry.npmmirror.com ; \
+# 设置国内 npm 镜像（可选）
+ARG USE_CHINA_NPM_REGISTRY=0
+RUN if [ "$USE_CHINA_NPM_REGISTRY" = "1" ]; then \
+    echo "使用 npm 镜像" && \
+    npm config set registry https://registry.npmmirror.com && \
+    pnpm config set registry https://registry.npmmirror.com ; \
     fi
 
-# Copy package files and install dependencies
-COPY ./tsconfig.json /app/
-COPY ./pnpm-lock.yaml /app/
-COPY ./package.json /app/
+# 复制依赖文件
+COPY ./tsconfig.json ./
+COPY ./pnpm-lock.yaml ./
+COPY ./package.json ./
 
-# Install dependencies, skipping Puppeteer download during install
+# 安装依赖（跳过 Puppeteer 下载）
 RUN \
     set -ex && \
     export PUPPETEER_SKIP_DOWNLOAD=true && \
-    # 先更新 lockfile 确保一致性
-    pnpm install --lockfile-only || true && \
-    pnpm install --frozen-lockfile && \
-    # 根据参数决定是否安装 youtubei.js
-    if [ "$INCLUDE_YOUTUBEI" = "true" ]; then \
-        echo "Installing youtubei.js for international version" && \
-        pnpm add youtubei.js; \
-    else \
-        echo "Skipping youtubei.js for China version"; \
-    fi && \
-    pnpm rb
+    pnpm install --frozen-lockfile
 
-# Copy source code and build the project
-COPY . /app
+# 复制源代码并构建
+COPY . .
+RUN pnpm build
 
-# 构建时根据版本处理 YouTube 路由
-RUN if [ "$INCLUDE_YOUTUBEI" = "true" ]; then \
-        echo "Building with YouTube support" && \
-        pnpm build; \
-    else \
-        echo "Building without YouTube support" && \
-        # 设置环境变量让构建过程知道要跳过 YouTube
-        SKIP_YOUTUBE_ROUTES=true pnpm build; \
-    fi
-
-# Stage 2: Final production stage
-FROM node:22-bookworm-slim AS final
+# 阶段2：最终镜像
+FROM rsshub-chrome-base:v1
 
 LABEL org.opencontainers.image.authors="wuquanlong@licaimofang.com"
 
-ENV NODE_ENV=production
-ENV TZ=Asia/Shanghai
-
 WORKDIR /app
 
-# Install runtime dependencies
-RUN \
-    set -ex && \
-    apt-get update && \
-    apt-get install -yq --no-install-recommends \
-        dumb-init git curl \
-    # Install Chromium if needed (for non-amd64 platforms)
-    && apt-get install -yq --no-install-recommends chromium \
-    && echo "CHROMIUM_EXECUTABLE_PATH=$(which chromium)" | tee /app/.env \
-    && rm -rf /var/lib/apt/lists/*
+# 设置环境变量
+ENV NODE_ENV=production \
+    TZ=Asia/Shanghai \
+    CACHE_TYPE=memory \
+    CACHE_EXPIRE=300 \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --headless=new"
 
-# Copy built files from build stage
-COPY --from=build /app/dist /app/dist
-COPY --from=build /app/lib /app/lib
-COPY --from=build /app/package.json /app/package.json
-COPY --from=build /app/node_modules /app/node_modules
+# 1. 首先以 root 身份创建必要的目录并设置权限
+RUN mkdir -p /app/logs /app/cache && \
+    chown -R pptruser:pptruser /app/logs /app/cache && \
+    chmod 755 /app/logs /app/cache
 
+# 2. 复制应用文件并设置权限
+COPY --from=builder --chown=pptruser:pptruser /app/dist /app/dist
+COPY --from=builder --chown=pptruser:pptruser /app/lib /app/lib
+COPY --from=builder --chown=pptruser:pptruser /app/package.json /app/package.json
+COPY --from=builder --chown=pptruser:pptruser /app/node_modules /app/node_modules
+
+# 3. 确保整个 /app 目录属于 pptruser
+RUN chown -R pptruser:pptruser /app
+
+# 暴露端口
 EXPOSE 1200
 
-ENTRYPOINT ["dumb-init", "--"]
+# 切换到非 root 用户
+USER pptruser
 
+# 启动命令
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["npm", "run", "start"]
