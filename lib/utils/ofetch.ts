@@ -1,6 +1,6 @@
 import { createFetch } from 'ofetch';
 import { config } from '@/config';
-import logger from '@/utils/logger';
+import logger, { maskProxyUri, proxyInfo, proxyError } from '@/utils/logger';
 import { register } from 'node-network-devtools';
 import type { HeaderGeneratorOptions } from 'header-generator';
 import proxy from '@/utils/proxy';
@@ -36,7 +36,7 @@ const rofetch = createFetch().create({
                         if (dynamicProxy) {
                             const dynamicProxyResult = await dynamicProxy.getProxy();
                             if (dynamicProxyResult) {
-                                logger.info(`Using dynamic proxy: ${dynamicProxyResult.uri}`);
+                                logger.info(`Using dynamic proxy: ${maskProxyUri(dynamicProxyResult.uri)}`);
                                 currentProxy = {
                                     uri: dynamicProxyResult.uri,
                                     isActive: true,
@@ -78,8 +78,8 @@ const rofetch = createFetch().create({
                         }),
                     };
 
-                    logger.info(`Using proxy ${currentProxy.uri} for request ${context.request}`);
-                    logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+                    logger.info(`Using proxy ${maskProxyUri(currentProxy.uri)} for request ${context.request}`);
+                    //logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
                 } catch (error) {
                     logger.error('Failed to set up proxy for request:', error);
                 }

@@ -169,13 +169,19 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
     return await cache.tryGet(
         'xueqiu:puppeteer_data',
         async () => {
+            let browser: Browser | undefined;
+            let page: Page | undefined;
+
             try {
                 // 使用封装的 getPuppeteerPage 函数，它会自动处理代理
-                const { page, destroy } = await getPuppeteerPage('https://xueqiu.com', {
+                const result = await getPuppeteerPage('https://xueqiu.com', {
                     gotoConfig: {
                         waitUntil: 'domcontentloaded'
                     }
                 });
+
+                page = result.page;
+                browser = result.browser;
 
                 // 设置 User-Agent（如果需要覆盖默认值）
                 const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -192,22 +198,40 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
 
                 logger.info('正在访问雪球首页，执行 JavaScript 挑战...');
 
-                // 等待页面加载 - 使用 setTimeout 替代 waitForTimeout
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                // 重新导航以确保使用新的UA和headers
+                await page.reload({
+                    waitUntil: 'domcontentloaded'
+                });
+
+                // 等待页面加载 - 增加等待时间
+                await new Promise(resolve => setTimeout(resolve, 5000));
 
                 // 等待可能的动态加载
                 try {
-                    await page.waitForSelector('body', { timeout: 5000 });
+                    await page.waitForSelector('body', { timeout: 10000 });
+                    logger.info('成功找到 body 元素');
                 } catch (error) {
                     logger.info('等待 body 超时，继续执行...');
                 }
 
                 // 再次等待确保 JavaScript 执行完成
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 3000));
 
                 // 获取页面内容以调试
                 const pageContent = await page.content();
                 logger.info('页面加载完成，HTML 长度:', pageContent.length);
+
+                // 检查页面是否包含雪球内容
+                if (pageContent.length < 1000) {
+                    logger.error('页面内容过少，可能未正确加载');
+                    logger.error('页面内容:', pageContent);
+                    throw new Error('页面加载失败，内容过少');
+                }
+
+                // 检查是否有 WAF 挑战
+                if (pageContent.includes('waf') || pageContent.includes('_waf')) {
+                    logger.info('检测到 WAF 相关关键词');
+                }
 
                 // 获取 WAF token
                 const wafToken = await page.evaluate(() => {
@@ -224,35 +248,50 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
                             return (window as any)._waf_bd8ce2ce37;
                         }
 
+                        // 尝试从 script 标签中查找
+                        const scripts = document.getElementsByTagName('script');
+                        for (let i = 0; i < scripts.length; i++) {
+                            const scriptContent = scripts[i].textContent || '';
+                            if (scriptContent.includes('_waf_bd8ce2ce37')) {
+                                const match = scriptContent.match(/_waf_bd8ce2ce37["']?\s*:\s*["']([^"']+)["']/);
+                                if (match && match[1]) {
+                                    return match[1];
+                                }
+                            }
+                        }
+
                         return '';
                     } catch (error) {
-                        logger.error('提取 WAF token 失败:', error);
+                        console.error('提取 WAF token 失败:', error);
                         return '';
                     }
                 });
 
-                if (!wafToken) {
+                let finalWafToken = wafToken;
+
+                if (!finalWafToken) {
                     // 尝试从页面 HTML 中提取
-                    const html = await page.content();
-                    const extractedToken = extractWafTokenFromHTML(html);
+                    const extractedToken = extractWafTokenFromHTML(pageContent);
                     if (extractedToken) {
+                        finalWafToken = extractedToken;
                         logger.info('从 HTML 中提取到 WAF token');
                     } else {
-                        logger.error('页面 HTML:', html.substring(0, 1000));
-                        throw new Error('无法提取 WAF token');
+                        logger.warn('无法从页面提取 WAF token');
+                        // 可以设置一个默认值或继续尝试其他方法
                     }
                 }
+
                 // 获取 cookies
                 const cookies = await page.cookies();
                 const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
 
                 logger.info('成功获取数据 via Puppeteer');
-                logger.info('WAF token:', wafToken.substring(0, 30) + '...');
+                logger.info('WAF token:', finalWafToken ? finalWafToken.substring(0, 30) + '...' : '未找到');
                 logger.info('Cookies 数量:', cookies.length);
                 logger.info('示例 cookies:', cookieString.substring(0, 200) + '...');
 
                 return {
-                    wafToken,
+                    wafToken: finalWafToken || '',
                     cookies: cookieString,
                     userAgent,
                 };
@@ -261,9 +300,12 @@ async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookies: stri
                 logger.error('Puppeteer 执行失败:', error);
                 throw error;
             } finally {
-                // 使用 getPuppeteerPage 返回的 destroy 函数来正确清理资源
+                // 正确清理资源
                 try {
-                    await destroy();
+                    if (browser) {
+                        await browser.close();
+                        logger.info('成功关闭 Puppeteer 浏览器');
+                    }
                 } catch (cleanupError) {
                     logger.warn('清理 Puppeteer 资源时出错:', cleanupError);
                 }

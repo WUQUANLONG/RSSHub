@@ -1,6 +1,6 @@
 import { config } from '@/config';
 import puppeteer, { Browser, Page } from 'rebrowser-puppeteer';
-import logger from './logger';
+import logger, { maskProxyUri, proxyInfo, proxyError } from './logger';
 import proxy from './proxy';
 import { anonymizeProxy } from 'proxy-chain';
 import { HttpsAgent as HttpAgent } from 'agentkeepalive';
@@ -44,13 +44,16 @@ const outPuppeteer = async () => {
                     if (dynamicProxy) {
                         const dynamicProxyResult = await dynamicProxy.getProxy();
                         if (dynamicProxyResult) {
-                            logger.info(`Using dynamic proxy: ${dynamicProxyResult.uri}`);
+                            logger.info(`Using dynamic proxy: ${maskProxyUri(dynamicProxyResult.uri)}`);
                             currentProxy = {
                                 uri: dynamicProxyResult.uri,
                                 isActive: true,
                                 failureCount: 0,
                                 urlHandler: dynamicProxyResult.urlHandler,
                                 isDynamic: true,
+                                // 确保用户名和密码传递
+                                username: dynamicProxyResult.username || dynamicProxyResult.urlHandler?.username,
+                                password: dynamicProxyResult.password || dynamicProxyResult.urlHandler?.password,
                             };
                         }
                     }
@@ -72,20 +75,40 @@ const outPuppeteer = async () => {
             const protocol = currentProxy.uri.startsWith('https') ? 'https' : 'http';
             const [host, port] = currentProxy.uri.replace(/^https?:\/\//, '').split(':');
 
+            // 检查是否有用户名和密码
+            const username = currentProxy.username || currentProxy.urlHandler?.username;
+            const password = currentProxy.password || currentProxy.urlHandler?.password;
+
+            // 构建代理URL
+            let proxyUrl;
+            if (username && password) {
+                // 对于需要认证的代理，将认证信息嵌入URL
+                proxyUrl = `${protocol}://${username}:${password}@${host}:${port}`;
+                logger.debug(`Using authenticated proxy: ${protocol}://${username}:***@${host}:${port}`);
+            } else {
+                // 不需要认证的代理
+                proxyUrl = `${protocol}://${host}:${port}`;
+                logger.debug(`Using proxy without auth: ${proxyUrl}`);
+            }
+
             // Handle proxy authentication
-            if (currentProxy.urlHandler?.username || currentProxy.urlHandler?.password) {
+            if (username || password) {
                 // Only HTTP proxies with authentication need to be anonymized
-                if (currentProxy.urlHandler.protocol === 'http:') {
+                if (protocol === 'http') {
                     try {
-                        const anonymizedProxy = await anonymizeProxy(currentProxy.uri);
+                        const anonymizedProxy = await anonymizeProxy(proxyUrl);
                         options.args.push(`--proxy-server=${anonymizedProxy}`);
 
                         logger.info(`Using anonymized proxy for puppeteer browser: ${anonymizedProxy}`);
                     } catch (error) {
                         logger.error('Failed to anonymize proxy:', error);
+                        // 如果匿名化失败，直接使用带认证的代理URL
+                        options.args.push(`--proxy-server=${proxyUrl}`);
                     }
                 } else {
-                    logger.warn('SOCKS/HTTPS proxy with authentication is not supported by puppeteer, continue without proxy');
+                    // HTTPS/SOCKS 代理直接使用带认证的URL
+                    options.args.push(`--proxy-server=${proxyUrl}`);
+                    logger.info(`Using authenticated HTTPS/SOCKS proxy for puppeteer browser`);
                 }
             } else {
                 // For proxies without authentication, set up using HttpAgent
@@ -102,7 +125,7 @@ const outPuppeteer = async () => {
                     // Configure puppeteer to use the proxy
                     options.args.push(`--proxy-server=${host}:${port}`);
 
-                    logger.info(`Using proxy ${currentProxy.uri} for puppeteer browser`);
+                    logger.info(`Using proxy ${maskProxyUri(currentProxy.uri)} for puppeteer browser`);
                     logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
                 } catch (error) {
                     logger.error('Failed to set up proxy for puppeteer browser:', error);
@@ -110,36 +133,21 @@ const outPuppeteer = async () => {
             }
         }
     }
+
     const browser = await (config.puppeteerWSEndpoint
         ? insidePuppeteer.connect({
-              browserWSEndpoint: config.puppeteerWSEndpoint,
-          })
+            browserWSEndpoint: config.puppeteerWSEndpoint,
+        })
         : insidePuppeteer.launch(
-              config.chromiumExecutablePath
-                  ? {
-                        executablePath: config.chromiumExecutablePath,
-                        ...options,
-                    }
-                  : options
-          ));
+            config.chromiumExecutablePath
+                ? {
+                    executablePath: config.chromiumExecutablePath,
+                    ...options,
+                }
+                : options
+        ));
 
-    // If we have authentication credentials, create a page and authenticate
-    if (currentProxy && currentProxy.urlHandler?.username && currentProxy.urlHandler?.password) {
-        try {
-            const page = await browser.newPage();
-            await page.authenticate({
-                username: currentProxy.urlHandler.username,
-                password: currentProxy.urlHandler.password,
-            });
-            logger.debug(`Authenticated with proxy ${currentProxy.uri}`);
-
-            // Close the page as it's just for authentication
-            await page.close();
-        } catch (authError) {
-            logger.error('Failed to authenticate with proxy:', authError);
-            // Don't throw here as we want to continue with the browser instance
-        }
-    }
+    // 移除了 page.authenticate() 的调用，因为认证信息已经在代理URL中
 
     setTimeout(async () => {
         await browser.close();
@@ -182,8 +190,8 @@ export const getPuppeteerPage = async (
 
     // Check if we should use a proxy for this request
     const shouldUseProxy = config.proxy.strategy === 'all' ||
-                           instanceOptions.retryCount > 0 ||
-                           (instanceOptions.headers && (instanceOptions.headers as Record<string, string>)['x-prefer-proxy'] === '1');
+        instanceOptions.retryCount > 0 ||
+        (instanceOptions.headers && (instanceOptions.headers as Record<string, string>)['x-prefer-proxy'] === '1');
 
     let hasProxy = false;
     let currentProxyState: any = null;
@@ -202,13 +210,16 @@ export const getPuppeteerPage = async (
                     if (dynamicProxy) {
                         const dynamicProxyResult = await dynamicProxy.getProxy();
                         if (dynamicProxyResult) {
-                            logger.info(`Using dynamic proxy: ${dynamicProxyResult.uri}`);
+                            logger.info(`Using dynamic proxy: ${maskProxyUri(dynamicProxyResult.uri)}`);
                             currentProxy = {
                                 uri: dynamicProxyResult.uri,
                                 isActive: true,
                                 failureCount: 0,
                                 urlHandler: dynamicProxyResult.urlHandler,
                                 isDynamic: true,
+                                // 确保用户名和密码传递
+                                username: dynamicProxyResult.username || dynamicProxyResult.urlHandler?.username,
+                                password: dynamicProxyResult.password || dynamicProxyResult.urlHandler?.password,
                             };
                         }
                     }
@@ -229,31 +240,100 @@ export const getPuppeteerPage = async (
             currentProxyState = currentProxy;
             hasProxy = true;
 
-            // Extract protocol from proxy URL
-            const protocol = currentProxy.uri.startsWith('https') ? 'https' : 'http';
-            const [host, port] = currentProxy.uri.replace(/^https?:\/\//, '').split(':');
+            // 解析代理URL
+            let proxyUrl = currentProxy.uri;
+            let protocol = 'http';
+            let host = '';
+            let port = '';
+            let username = '';
+            let password = '';
 
-            // Set up proxy configuration using HttpAgent
             try {
-                const httpAgent = new HttpAgent({
-                    host,
-                    port: Number.parseInt(port),
-                    maxSockets: 50,
-                    maxFreeSockets: 10,
-                    timeout: 60000,
-                    freeSocketTimeout: 30000,
-                });
+                const proxyUrlObj = new URL(currentProxy.uri);
+                protocol = proxyUrlObj.protocol.replace(':', '');
+                host = proxyUrlObj.hostname;
+                port = proxyUrlObj.port;
+                username = proxyUrlObj.username || currentProxy.username || '';
+                password = proxyUrlObj.password || currentProxy.password || '';
 
-                // Configure puppeteer to use the proxy
-                options.args.push(`--proxy-server=${host}:${port}`);
+                // 如果没有端口，设置默认端口
+                if (!port) {
+                    port = protocol === 'https' ? '443' : '80';
+                }
 
-                logger.info(`Using proxy ${currentProxy.uri} for puppeteer request ${url}`);
-                logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+                logger.debug(`Parsed proxy: ${protocol}://${username ? username + ':***' : ''}@${host}:${port}`);
             } catch (error) {
-                logger.error('Failed to set up proxy for puppeteer request:', error);
+                logger.error('Failed to parse proxy URL:', error);
+                throw new Error(`Invalid proxy URL: ${currentProxy.uri}`);
             }
+
+            // 存储认证信息到 currentProxyState，以便后续使用
+            if (username || password) {
+                currentProxyState.auth = { username, password };
+            }
+
+            // 处理不同类型的代理
+            if (protocol === 'http' || protocol === 'https') {
+                // 对于HTTP/HTTPS代理，检查是否需要认证
+                if (username || password) {
+                    // 对于需要认证的HTTP代理，使用 anonymizeProxy
+                    if (protocol === 'http') {
+                        try {
+                            // 构建带认证的代理URL
+                            const authProxyUrl = username && password
+                                ? `${protocol}://${username}:${password}@${host}:${port}`
+                                : `${protocol}://${host}:${port}`;
+
+                            logger.info(`Anonymizing proxy: ${protocol}://${username}:***@${host}:${port}`);
+
+                            // 使用 proxy-chain 的 anonymizeProxy 创建本地代理
+                            const anonymizedProxy = await anonymizeProxy(authProxyUrl);
+
+                            // 解析匿名化后的代理URL（应该是 http://127.0.0.1:xxxxx 格式）
+                            const anonymizedUrl = new URL(anonymizedProxy);
+                            const anonymizedHost = anonymizedUrl.hostname;
+                            const anonymizedPort = anonymizedUrl.port;
+
+                            // 使用匿名化后的代理（不带认证信息）
+                            options.args.push(`--proxy-server=${anonymizedHost}:${anonymizedPort}`);
+
+                            logger.info(`Using anonymized proxy: ${anonymizedHost}:${anonymizedPort} for puppeteer request`);
+                            logger.info(`Original proxy: ${username}:***@${host}:${port}`);
+
+                            // 标记为已匿名化，不需要额外的认证
+                            currentProxyState.anonymized = true;
+
+                        } catch (error) {
+                            logger.error('Failed to anonymize proxy, trying direct approach:', error);
+
+                            // 如果匿名化失败，尝试直接使用代理
+                            const proxyServer = `${host}:${port}`;
+                            options.args.push(`--proxy-server=${proxyServer}`);
+                            logger.info(`Using direct proxy: ${proxyServer} (will authenticate via page.authenticate)`);
+                        }
+                    } else {
+                        // HTTPS代理，直接使用
+                        const proxyServer = `${host}:${port}`;
+                        options.args.push(`--proxy-server=${proxyServer}`);
+                        logger.info(`Using HTTPS proxy: ${proxyServer} for puppeteer request`);
+                    }
+                } else {
+                    // 不需要认证的代理
+                    const proxyServer = `${host}:${port}`;
+                    options.args.push(`--proxy-server=${proxyServer}`);
+                    logger.info(`Using proxy without auth: ${proxyServer} for puppeteer request`);
+                }
+            } else {
+                // SOCKS代理或其他类型
+                options.args.push(`--proxy-server=${currentProxy.uri}`);
+                logger.info(`Using proxy: ${maskProxyUri(currentProxy.uri)} for puppeteer request`);
+            }
+
+            logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
         }
+
     }
+
     let browser: Browser;
     if (config.puppeteerWSEndpoint) {
         const endpointURL = new URL(config.puppeteerWSEndpoint);
@@ -267,9 +347,9 @@ export const getPuppeteerPage = async (
         browser = await insidePuppeteer.launch(
             config.chromiumExecutablePath
                 ? {
-                      executablePath: config.chromiumExecutablePath,
-                      ...options,
-                  }
+                    executablePath: config.chromiumExecutablePath,
+                    ...options,
+                }
                 : options
         );
     }
@@ -280,49 +360,65 @@ export const getPuppeteerPage = async (
 
     const page = await browser.newPage();
 
-    if (hasProxy && currentProxyState) {
-        logger.debug(`Proxying request in puppeteer via ${currentProxyState.uri}: ${url}`);
+// 设置代理认证（如果需要且没有使用匿名化代理）
+    if (hasProxy && currentProxyState?.auth && !currentProxyState?.anonymized) {
+        try {
+            await page.authenticate({
+                username: currentProxyState.auth.username,
+                password: currentProxyState.auth.password,
+            });
+            logger.info(`Set proxy authentication for ${url} (username: ${currentProxyState.auth.username})`);
+        } catch (authError) {
+            logger.error('Failed to authenticate proxy:', authError);
+        }
     }
-
-    if (hasProxy && currentProxyState && (currentProxyState.urlHandler?.username || currentProxyState.urlHandler?.password)) {
-        await page.authenticate({
-            username: currentProxyState.urlHandler?.username,
-            password: currentProxyState.urlHandler?.password,
-        });
-    }
+    // 移除了 page.authenticate() 的调用，因为认证信息已经在代理URL中
 
     if (instanceOptions.onBeforeLoad) {
         await instanceOptions.onBeforeLoad(page, browser);
     }
 
     if (!instanceOptions.noGoto) {
-        try {
-            await page.goto(url, instanceOptions.gotoConfig || { waitUntil: 'domcontentloaded' });
-        } catch (error) {
-            // Handle proxy-related errors
-            if (hasProxy && currentProxyState) {
-                logger.warn(`Puppeteer navigation failed with proxy ${currentProxyState.uri}, marking as failed: ${error}`);
+        let retryCount = 0;
+        const maxRetries = 2;
 
-                // Mark the proxy as failed if we're using multiProxy mode
-                if (proxy.multiProxy) {
-                    proxy.markProxyFailed(currentProxyState.uri);
-                }
+        while (retryCount <= maxRetries) {
+            try {
+                await page.goto(url, {
+                    ...(instanceOptions.gotoConfig || { waitUntil: 'domcontentloaded' }),
+                    timeout: 30000, // 增加超时时间
+                });
+                break; // 成功则退出循环
+            } catch (error) {
+                retryCount++;
 
-                // If this was a retry attempt, don't retry again
-                if (instanceOptions.retryCount && instanceOptions.retryCount > 0) {
+                if (retryCount > maxRetries) {
+                    // Handle proxy-related errors
+                    if (hasProxy && currentProxyState) {
+                        logger.warn(`Puppeteer navigation failed with proxy ${currentProxyState.uri}, marking as failed: ${error}`);
+
+                        // Mark the proxy as failed if we're using multiProxy mode
+                        if (proxy.multiProxy) {
+                            proxy.markProxyFailed(currentProxyState.uri);
+                        }
+
+                        // If this was a retry attempt, don't retry again
+                        if (instanceOptions.retryCount && instanceOptions.retryCount > 0) {
+                            throw error;
+                        }
+                    }
                     throw error;
                 }
 
-                // For non-retry attempts, re-throw to allow caller to retry if needed
-                throw error;
+                logger.warn(`导航失败，第 ${retryCount} 次重试: ${error}`);
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒后重试
             }
-            throw error;
         }
     }
 
     return {
         page,
-        destory: async () => {
+        destroy: async () => {  // 确保这里是 "destroy"
             await browser.close();
         },
         browser,

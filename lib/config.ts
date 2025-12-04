@@ -53,6 +53,7 @@ export type Config = {
     proxyService: {
         host: string;
         key: string;
+        pwd: string;
     };
     // access control
     accessKey?: string;
@@ -533,7 +534,8 @@ const calculateValue = () => {
         // proxy service
         proxyService: {
             host: envs.PROXY_SERVICE_HOST || 'https://share.proxy.qg.net',
-            key: envs.PROXY_SERVICE_KEY || '',
+            key: envs.PROXY_AUTH_KEY || '',
+            pwd: envs.PROXY_AUTH_PWD || '',
         },
         // access control
         accessKey: envs.ACCESS_KEY,

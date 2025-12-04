@@ -3,7 +3,7 @@ import { PacProxyAgent } from 'pac-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { ProxyAgent } from 'undici';
-import logger from '@/utils/logger';
+import logger, { maskProxyUri, proxyInfo, proxyError } from '@/utils/logger';
 import { DynamicProxy } from './dynamic-proxy';
 import cache from '@/utils/cache';
 
@@ -105,7 +105,7 @@ const initializeProxyConfig = async () => {
                     // Get the proxy (this will check cache first, then fetch if needed)
                     const dynamicProxyResult = await dynamicProxy.getProxy();
                     if (dynamicProxyResult) {
-                        logger.info('Using dynamic proxy:', dynamicProxyResult.uri);
+                        logger.info('Using dynamic proxy:', maskProxyUri(dynamicProxyResult.uri));
                         return {
                             proxyUri: dynamicProxyResult.uri,
                             proxyObj: {
