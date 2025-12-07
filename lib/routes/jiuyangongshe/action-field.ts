@@ -76,7 +76,7 @@ interface ApiResponse {
 export const route: Route = {
     path: '/action/field',
     categories: ['finance'],
-    example: '/jiuyangongshe/action/field',
+    example: '/jiuyangongshe/action/field/2025-11-03',
     parameters: { date: '日期，格式 YYYY-MM-DD，默认为今天' },
     features: {
         requireConfig: false,
@@ -133,111 +133,158 @@ async function loginAndGetSession() {
 }
 
 async function handler(ctx) {
-    const { date = formatToday() } = ctx.req.param();
+
+    // 处理请求参数
+    let queryParams = {};
+    try {
+        const rawReq = ctx.req?.originalReq || ctx.req;
+
+        if (rawReq && rawReq.url) {
+            console.log('原始请求 URL:', rawReq.url);
+
+            const url = new URL(rawReq.url, 'http://localhost');
+            queryParams = Object.fromEntries(url.searchParams);
+            console.log('解析到的参数:', queryParams);
+        }
+    } catch (error) {
+        console.log('参数解析失败:', error.message);
+    }
+    // 构建 API 查询参数
+    let date = formatToday();
+    if (queryParams.date) {
+        date = queryParams.date;
+    }
     const pc = 1;
+
+    console.log('开始处理请求，日期:', date); // 添加调试日志
 
     // Get or refresh session from cache
     const sessionKey = 'jiuyangongshe:session';
     let session = await cache.get(sessionKey);
 
+    console.log('Session from cache:', !!session); // 检查是否有缓存session
+
     if (!session) {
-        session = await loginAndGetSession();
-        // Cache session for 25 hours (less than 30 days to ensure refresh before expiration)
-        await cache.set(sessionKey, session, 25 * 60 * 60);
+        try {
+            console.log('正在登录获取session...');
+            session = await loginAndGetSession();
+            console.log('登录成功，session:', session?.substring(0, 20) + '...');
+            // Cache session for 25 hours (less than 30 days to ensure refresh before expiration)
+            await cache.set(sessionKey, session, 25 * 60 * 60);
+        } catch (error) {
+            console.error('登录失败:', error);
+            throw new Error(`登录失败: ${error.message}`);
+        }
     }
 
     const time = String(Date.now());
-    const response: ApiResponse = await ofetch('https://app.jiuyangongshe.com/jystock-app/api/v1/action/field', {
-        method: 'POST',
-        headers: {
-            Accept: 'application/json, text/plain, */*',
-            'Content-Type': 'application/json',
-            Origin: 'https://www.jiuyangongshe.com',
-            Referer: 'https://www.jiuyangongshe.com/',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
-            platform: '3',
-            timestamp: time,
-            token: md5(`Uu0KfOB8iUP69d3c:${time}`),
-            Cookie: `SESSION=${session}`,
-        },
-        body: {
-            date,
-            pc,
-        },
-    });
 
-    // 检查API响应状态
-    if (response.errCode !== '0') {
-        // throw new Error(`API请求失败: ${response.msg || '未知错误'}`);
-        throw new Error(`API请求失败: ${response.msg || '未知错误'}`);
+    try {
+        console.log('正在请求API...');
+        const response: ApiResponse = await ofetch('https://app.jiuyangongshe.com/jystock-app/api/v1/action/field', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json, text/plain, */*',
+                'Content-Type': 'application/json',
+                Origin: 'https://www.jiuyangongshe.com',
+                Referer: 'https://www.jiuyangongshe.com/',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+                platform: '3',
+                timestamp: time,
+                token: md5(`Uu0KfOB8iUP69d3c:${time}`),
+                Cookie: `SESSION=${session}`,
+                'x-prefer-proxy': '1', // 强制使用代理标识
+            },
+            body: {
+                date,
+                pc,
+            },
+        });
+
+        console.log('API响应状态码:', response.errCode);
+        console.log('API响应消息:', response.msg);
+        console.log('数据长度:', response.data?.length || 0);
+
+        // 检查API响应状态
+        if (response.errCode !== '0') {
+            console.error('API错误详情:', response);
+            throw new Error(`API请求失败: ${response.msg || '未知错误'} (错误码: ${response.errCode})`);
+        }
+
+        // 获取数据列表
+        const dataList = response.data || [];
+
+        console.log('处理后的数据列表长度:', dataList.length);
+
+        if (dataList.length === 0) {
+            console.log('数据列表为空，返回空结果');
+            return {
+                title: `题材概念 - 韭研公社 - ${date}`,
+                link: `https://www.jiuyangongshe.com/actionField?date=${date}`,
+                description: '韭研公社-研究共享，茁壮成长（原韭菜公社）题材概念',
+                language: 'zh-cn',
+                item: [],
+            };
+        }
+
+        // 过滤掉没有list或count为0的项目
+        const items = [];
+
+        // 1. 收集所有需要并行处理的文章任务
+        const articlePromises = [];
+
+        for (const item of dataList) {
+            if (item.count > 0 && item.list && item.list.length > 0) {
+                // 分类主条目（同步处理）
+                items.push({
+                    // title: `${item.name} (${item.count}个)` || `题材: ${item.action_field_id}`,
+                    title: item.name ? `${item.name} (${item.count}个)` : `题材: ${item.action_field_id}`,
+                    link: `https://www.jiuyangongshe.com/actionField?date=${date}&id=${item.action_field_id}`,
+                    description: generateCategoryDescription(item),
+                    pubDate: parseDate(`${item.date} 00:00:00`),
+                    category: [item.name],
+                    guid: `jiuyangongshe-action-field-${item.action_field_id}-${item.date}`,
+                });
+
+                for (const article of item.list) {
+                    // 使用function声明的IIFE
+                    articlePromises.push(
+                        (async function () {
+                            const description = await renderArticleDescription(article);
+
+                            return {
+                                title: generateArticleTitle(article),
+                                link: `https://www.jiuyangongshe.com/article/${article.article.article_id}?from=timeline&channelId=${item.action_field_id}&date=${date}&code=${article.code}&name=${encodeURIComponent(article.name)}&type=1`,
+                                description,
+                                pubDate: parseDate(article.article.create_time),
+                                category: [item.name, `价格: ¥${article.article.action_info.price / 100}`],
+                                author: article.article.user.nickname || undefined,
+                                guid: `jiuyangongshe-article-${article.article.article_id}`,
+                            };
+                        })()
+                    );
+                }
+            }
     }
-    // console.log('返回数据',response.data )
-    // 获取数据列表
-    const dataList = response.data || [];
 
-    if (dataList.length === 0) {
+
+        // 2. 并行执行所有文章处理任务
+        const articleItems = await Promise.all(articlePromises);
+
+        // 3. 合并结果
+        items.push(...articleItems);
+
         return {
             title: `题材概念 - 韭研公社`,
             link: 'https://www.jiuyangongshe.com/actionField',
             description: '韭研公社-研究共享，茁壮成长（原韭菜公社）题材概念',
             language: 'zh-cn',
-            item: [],
+            item: items,
         };
+    } catch (error) {
+        console.error('请求过程中发生错误:', error);
+        throw new Error(`获取数据失败: ${error.message}`);
     }
-
-    // 过滤掉没有list或count为0的项目
-    const items = [];
-
-    // 1. 收集所有需要并行处理的文章任务
-    const articlePromises = [];
-
-    for (const item of dataList) {
-        if (item.count > 0 && item.list && item.list.length > 0) {
-            // 分类主条目（同步处理）
-            items.push({
-                // title: `${item.name} (${item.count}个)` || `题材: ${item.action_field_id}`,
-                title: item.name ? `${item.name} (${item.count}个)` : `题材: ${item.action_field_id}`,
-                link: `https://www.jiuyangongshe.com/actionField?date=${date}&id=${item.action_field_id}`,
-                description: generateCategoryDescription(item),
-                pubDate: parseDate(`${item.date} 00:00:00`),
-                category: [item.name],
-                guid: `jiuyangongshe-action-field-${item.action_field_id}-${item.date}`,
-            });
-
-            for (const article of item.list) {
-                // 使用function声明的IIFE
-                articlePromises.push(
-                    (async function () {
-                        const description = await renderArticleDescription(article);
-
-                        return {
-                            title: generateArticleTitle(article),
-                            link: `https://www.jiuyangongshe.com/article/${article.article.article_id}?from=timeline&channelId=${item.action_field_id}&date=${date}&code=${article.code}&name=${encodeURIComponent(article.name)}&type=1`,
-                            description,
-                            pubDate: parseDate(article.article.create_time),
-                            category: [item.name, `价格: ¥${article.article.action_info.price / 100}`],
-                            author: article.article.user.nickname || undefined,
-                            guid: `jiuyangongshe-article-${article.article.article_id}`,
-                        };
-                    })()
-                );
-            }
-        }
-    }
-
-    // 2. 并行执行所有文章处理任务
-    const articleItems = await Promise.all(articlePromises);
-
-    // 3. 合并结果
-    items.push(...articleItems);
-
-    return {
-        title: `题材概念 - 韭研公社`,
-        link: 'https://www.jiuyangongshe.com/actionField',
-        description: '韭研公社-研究共享，茁壮成长（原韭菜公社）题材概念',
-        language: 'zh-cn',
-        item: items,
-    };
 }
 
 function formatToday(): string {
@@ -273,7 +320,7 @@ function generateCategoryDescription(item: DataItem): string {
 
 function generateArticleTitle(article: Article): string {
     const actionInfo = article.article.action_info;
-    return `[${article.name}] ${article.article.title} (${formatPrice(actionInfo.price)})`;
+    return `[${article.name}] [${article.code}] ${article.article.title} (${formatPrice(actionInfo.price)})`;
 }
 
 function formatPrice(price: number): string {
@@ -281,8 +328,5 @@ function formatPrice(price: number): string {
 }
 
 async function renderArticleDescription(article: Article): Promise<string> {
-    const params = {
-        article,
-    };
-    return await art(path.join(__dirname, 'templates/article.art'), params);
+    return JSON.stringify(article);
 }

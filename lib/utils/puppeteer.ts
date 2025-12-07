@@ -29,10 +29,10 @@ const outPuppeteer = async () => {
     // Check if we should use a proxy for this request
     const shouldUseProxy = config.proxy.strategy === 'all';
 
-    let currentProxy = proxy.getCurrentProxy();
-
     if (shouldUseProxy) {
         logger.info('Puppeteer browser requires proxy, attempting to get proxy server');
+
+        let currentProxy = proxy.getCurrentProxy();
 
         // For dynamic proxies that are still initializing or need refresh
         if (currentProxy?.isDynamic && !currentProxy.uri) {
@@ -131,7 +131,12 @@ const outPuppeteer = async () => {
                     logger.error('Failed to set up proxy for puppeteer browser:', error);
                 }
             }
+        } else {
+            logger.warn('Should use proxy but no proxy available, proceeding without proxy');
         }
+    } else {
+        // 不需要代理的情况
+        logger.info('Puppeteer browser will run without proxy');
     }
 
     const browser = await (config.puppeteerWSEndpoint
@@ -170,6 +175,7 @@ export const getPuppeteerPage = async (
         };
         noGoto?: boolean;
         retryCount?: number;
+        headers?: Record<string, string>;
     } = {}
 ) => {
     const options = {
@@ -190,15 +196,16 @@ export const getPuppeteerPage = async (
 
     // Check if we should use a proxy for this request
     const shouldUseProxy = config.proxy.strategy === 'all' ||
-        instanceOptions.retryCount > 0 ||
-        (instanceOptions.headers && (instanceOptions.headers as Record<string, string>)['x-prefer-proxy'] === '1');
+        (instanceOptions.retryCount && instanceOptions.retryCount > 0) ||
+        (instanceOptions.headers && instanceOptions.headers['x-prefer-proxy'] === '1');
 
     let hasProxy = false;
     let currentProxyState: any = null;
-    let currentProxy = proxy.getCurrentProxy();
 
     if (shouldUseProxy) {
         logger.info('Puppeteer request requires proxy, attempting to get proxy server');
+
+        let currentProxy = proxy.getCurrentProxy();
 
         // For dynamic proxies that are still initializing or need refresh
         if (currentProxy?.isDynamic && !currentProxy.uri) {
@@ -330,8 +337,12 @@ export const getPuppeteerPage = async (
             }
 
             logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+        } else {
+            logger.warn('Should use proxy but no proxy available, proceeding without proxy');
         }
-
+    } else {
+        // 不需要代理的情况
+        logger.info('Puppeteer request will run without proxy');
     }
 
     let browser: Browser;
@@ -360,7 +371,7 @@ export const getPuppeteerPage = async (
 
     const page = await browser.newPage();
 
-// 设置代理认证（如果需要且没有使用匿名化代理）
+    // 设置代理认证（如果需要且没有使用匿名化代理）
     if (hasProxy && currentProxyState?.auth && !currentProxyState?.anonymized) {
         try {
             await page.authenticate({
@@ -372,7 +383,6 @@ export const getPuppeteerPage = async (
             logger.error('Failed to authenticate proxy:', authError);
         }
     }
-    // 移除了 page.authenticate() 的调用，因为认证信息已经在代理URL中
 
     if (instanceOptions.onBeforeLoad) {
         await instanceOptions.onBeforeLoad(page, browser);
