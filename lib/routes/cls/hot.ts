@@ -53,20 +53,19 @@ async function handler(ctx) {
     items = await Promise.all(
         items.map((item) =>
             cache.tryGet(item.link, async () => {
+
                 const detailResponse = await got({
                     method: 'get',
                     url: item.link,
                 });
-
                 const content = load(detailResponse.data);
-
                 const nextData = JSON.parse(content('script#__NEXT_DATA__').text());
                 const articleDetail = nextData.props.initialState.detail.articleDetail;
-
-                item.author = articleDetail.author?.name ?? item.author ?? '';
                 item.description = art(path.join(__dirname, 'templates/depth.art'), {
                     articleDetail,
                 });
+                item.author = articleDetail.author?.name ?? item.author ?? '';
+
 
                 return item;
             })

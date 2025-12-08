@@ -49,7 +49,6 @@ async function handler(ctx) {
 
         const targetWithDetail = { ...item.target };
 
-        // 添加 detail_text 到 target 对象中
         targetWithDetail.detail_text = item.detail_text || '';
 
         return {
@@ -57,7 +56,6 @@ async function handler(ctx) {
             title: item.target.title,
             pubDate: parseDate(item.target.created * 1000),
             description: `${JSON.stringify(targetWithDetail, null, 2)}`,
-            detail_text: item.detail_text,
         };
     });
 
