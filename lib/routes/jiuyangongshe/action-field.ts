@@ -2,8 +2,6 @@ import { Route } from '@/types';
 import ofetch from '@/utils/ofetch';
 import { parseDate } from '@/utils/parse-date';
 import md5 from '@/utils/md5';
-import { art } from '@/utils/render';
-import path from 'node:path';
 import cache from '@/utils/cache';
 
 interface ActionInfo {
