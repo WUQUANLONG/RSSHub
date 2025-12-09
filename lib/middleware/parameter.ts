@@ -79,6 +79,7 @@ const middleware: MiddlewareHandler = async (ctx, next) => {
         data.description && (data.description = entities.decodeXML(data.description + ''));
 
         // sort items
+        // 在全局中，不做排序，排序由各个路由自己处理。
         // if (ctx.req.query('sorted') !== 'false') {
         //     data.item = data.item.toSorted((a: DataItem, b: DataItem) => +new Date(b.pubDate || 0) - +new Date(a.pubDate || 0));
         // }
