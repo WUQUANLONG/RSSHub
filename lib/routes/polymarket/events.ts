@@ -153,12 +153,7 @@ function generateItemDescription(event: any) {
 
     try {
         const jsonData = JSON.stringify(eventData, null, 2);
-
-        return `
-<!-- RAW_EVENT_DATA_START -->
-${jsonData}
-<!-- RAW_EVENT_DATA_END -->
-        `.trim();
+        return jsonData;
     } catch (error) {
         console.log('JSON 序列化失败:', error);
         return `数据序列化错误: ${error.message}`;
