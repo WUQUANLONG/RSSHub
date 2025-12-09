@@ -115,33 +115,8 @@ async function handler(ctx) {
                 }
 
                 // 构造描述
-                let description = '';
-                if (imageUrl) {
-                    description += `<img src="${imageUrl}" alt="${title}" style="max-width: 100%; height: auto;"><br><br>`;
-                }
 
-                description += `<strong>${title}</strong><br><br>`;
-
-                if (hotValue) {
-                    description += `🔥 热度: ${hotValue}<br>`;
-                }
-
-                if (labelDesc) {
-                    description += `🏷️ 标签: ${labelDesc}<br>`;
-                }
-
-                if (categories) {
-                    description += `📂 分类: ${categories}<br>`;
-                }
-
-                if (item.QueryWord && item.QueryWord !== title) {
-                    description += `🔍 搜索词: ${item.QueryWord}<br>`;
-                }
-
-                // 添加更多信息
-                if (item.ClusterIdStr) {
-                    description += `📊 话题ID: ${item.ClusterIdStr}<br>`;
-                }
+                const description = JSON.stringify(item, null, 2);
 
                 items.push({
                     title: `${index + 1}. ${title}`,
