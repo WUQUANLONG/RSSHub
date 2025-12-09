@@ -79,9 +79,9 @@ const middleware: MiddlewareHandler = async (ctx, next) => {
         data.description && (data.description = entities.decodeXML(data.description + ''));
 
         // sort items
-        if (ctx.req.query('sorted') !== 'false') {
-            data.item = data.item.toSorted((a: DataItem, b: DataItem) => +new Date(b.pubDate || 0) - +new Date(a.pubDate || 0));
-        }
+        // if (ctx.req.query('sorted') !== 'false') {
+        //     data.item = data.item.toSorted((a: DataItem, b: DataItem) => +new Date(b.pubDate || 0) - +new Date(a.pubDate || 0));
+        // }
 
         const handleItem = (item: DataItem) => {
             item.title && (item.title = entities.decodeXML(item.title + ''));

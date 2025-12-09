@@ -1,12 +1,8 @@
 import { Route } from '@/types';
 
-import cache from '@/utils/cache';
 import got from '@/utils/got';
-import { load } from 'cheerio';
-import timezone from '@/utils/timezone';
-import { parseDate, parseRelativeDate } from '@/utils/parse-date';
-import { art } from '@/utils/render';
-import path from 'node:path';
+import sanitizeHtml from "sanitize-html";
+import {parseDate} from "@/utils/parse-date";
 
 export const route: Route = {
     path: '/zhugandao/topic',
@@ -30,296 +26,333 @@ export const route: Route = {
     name: '步行街主干道热帖',
     maintainers: ['wuquanlong'],
     handler,
-    description: `提取虎扑步行街主干道的热帖数据`,
+    description: `提取虎扑步行街主干道的热帖数据，从 window.$$data.topic.threads.list 中获取`,
 };
 
-// 定义数据类型接口
+// 定义数据接口
+interface Author {
+    uid?: string;
+    username?: string;
+    nickname?: string;
+    avatar?: string;
+    level?: number;
+    [key: string]: any;
+}
+
+interface Topic {
+    tid?: string;
+    name?: string;
+    icon?: string;
+    description?: string;
+    color?: string;
+    [key: string]: any;
+}
+
 interface ThreadItem {
-    threadId?: string;
-    title?: string;
-    url?: string;
-    replyCount?: number;
-    viewCount?: number;
-    author?: string;
-    authorId?: string;
-    createTime?: string;
-    lastReplyTime?: string;
-    // 其他可能的字段
+    tid: string;
+    title: string;
+    cover: string;
+    url: string;
+    lights: number;
+    replies: number;
+    read: number;
+    createdAt: number;
+    createdAtFormat: string;
+    repliedAt: number;
+    hasVideo: boolean;
+    author: Author;
+    topicId: string;
+    topic: Topic;
+    titleFont: string;
+    [key: string]: any;
+}
+
+interface ThreadsData {
+    count: number;
+    size: number;
+    current: number;
+    total: number;
+    baseUrl: string;
+    list: ThreadItem[];
+    [key: string]: any;
 }
 
 interface TopicData {
     isLogin?: boolean;
     follow?: any[];
     hot?: any[];
-    threads?: ThreadItem[];
+    threads?: ThreadsData;
+    [key: string]: any;
 }
 
 interface WindowData {
     topic?: TopicData;
-    threads?: ThreadItem[]; // 兼容两种结构
+    [key: string]: any;
 }
 
 async function handler(ctx) {
     const currentUrl = 'https://bbs.hupu.com/topic-daily-hot';
-
-    // 获取缓存
-    const cacheKey = 'hupu_zhugandao_topic_threads';
-    const cachedData = await cache.tryGet(
-        cacheKey,
-        async () => {
-            const response = await got({
-                method: 'get',
-                url: currentUrl,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    Referer: 'https://bbs.hupu.com/',
-                },
-            });
-
-            const $ = load(response.data);
-            const windowData = extractWindowDataFromHTML($);
-
-            if (!windowData || (!windowData.topic?.threads && !windowData.threads)) {
-                // 如果提取失败，回退到原来的解析方式
-                console.log('无法提取window.$$data，使用备选解析方式');
-                return {
-                    threads: extractThreadsFallback($),
-                    lastUpdated: Date.now(),
-                };
-            }
-
-            // 优先使用topic.threads，如果没有则使用threads
-            const threads = windowData.topic?.threads || windowData.threads || [];
-
-            return {
-                threads,
-                lastUpdated: Date.now(),
-            };
+    // 请求页面
+    const response = await got({
+        method: 'get',
+        url: currentUrl,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://bbs.hupu.com/',
         },
-        60, // 缓存5分钟
-        false
-    );
+    });
 
-    // 转换数据为RSS格式
-    const items = await Promise.all(
-        (cachedData.threads || []).map((thread) =>
-            cache.tryGet(
-                `hupu_thread_${thread.threadId || thread.title}`,
-                async () => {
-                    const item: any = {
-                        title: thread.title || '未命名帖子',
-                        link: thread.url ? `https://bbs.hupu.com${thread.url}` : currentUrl,
-                        author: thread.author || '虎扑用户',
-                        pubDate: thread.createTime ? timezone(parseDate(thread.createTime), +8) : new Date(),
-                        category: ['步行街主干道'],
-                        guid: thread.threadId || `hupu_${Date.now()}_${Math.random()}`,
-                    };
+    const html = response.data;
+    // 提取 window.$$data 数据
+    const windowData = extractWindowData(html);
 
-                    // 如果有URL，尝试获取详细内容
-                    if (thread.url) {
-                        try {
-                            const detailResponse = await got({
-                                method: 'get',
-                                url: `https://bbs.hupu.com${thread.url}`,
-                                headers: {
-                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                                },
-                            });
+    if (!windowData) {
+        throw new Error('无法从页面提取 window.$$data 数据');
+    }
 
-                            const content = load(detailResponse.data);
-                            const videos: any[] = [];
+    //console.log('windowData.topic:', windowData.topic);
+    //console.log('windowData.topic.threads:', windowData.topic?.threads);
 
-                            content('.hupu-post-video').each(function () {
-                                videos.push({
-                                    source: content(this).attr('src'),
-                                    poster: content(this).attr('poster'),
-                                });
-                            });
+    // 获取 threads.list 数据
+    const threadsData = windowData.topic?.threads;
+    const threadList = threadsData?.list || [];
 
-                            // 提取作者信息
-                            const author = content('.bbs-user-wrapper-content-name-span').first().text() || thread.author;
-                            const postTime = content('.second-line-user-info').first().text();
+    if (threadList.length === 0) {
+        throw new Error('未找到帖子数据 (topic.threads.list 为空)');
+    }
+    //console.log(`成功提取到 ${threadList.length} 条帖子`);
 
-                            item.author = author;
-                            if (postTime) {
-                                item.pubDate = timezone(parseRelativeDate(postTime), +8);
-                            }
-
-                            item.description = art(path.join(__dirname, 'templates/description.art'), {
-                                videos,
-                                description: content('.bbs-content').first().html() || thread.title,
-                                replyCount: thread.replyCount,
-                                viewCount: thread.viewCount,
-                            });
-                        } catch (error) {
-                            console.error(`获取帖子详情失败: ${thread.url}`, error);
-                            // 使用基本信息作为描述
-                            item.description = art(path.join(__dirname, 'templates/description.art'), {
-                                videos: [],
-                                description: thread.title || '',
-                                replyCount: thread.replyCount,
-                                viewCount: thread.viewCount,
-                            });
-                        }
-                    } else {
-                        // 没有详细URL，使用基本信息
-                        item.description = art(path.join(__dirname, 'templates/description.art'), {
-                            videos: [],
-                            description: thread.title || '',
-                            replyCount: thread.replyCount,
-                            viewCount: thread.viewCount,
-                        });
-                    }
-
-                    return item;
-                },
-                3600 // 帖子详情缓存1小时
-            )
-        )
-    );
+    const items = threadList.map((thread) => {
+        return {
+            title: thread.title,
+            link: `https://bbs.hupu.com${thread.url}`,
+            description: JSON.stringify(thread, null, 2), // 深度JSON化
+            author: thread.author?.username || thread.author?.nickname || '匿名用户',
+            pubDate: new Date(thread.createdAt),
+            guid: `hupu_${thread.tid}`,
+            category: ['步行街主干道'],
+        };
+    });
 
     return {
-        title: '虎扑社区 - 步行街主干道热帖',
+        title: '虎扑步行街主干道热帖',
         link: currentUrl,
-        description: '虎扑步行街主干道最新热帖',
-        language: 'zh-cn',
-        item: items.filter(Boolean), // 过滤掉null/undefined
+        description: `共 ${threadList.length} 条帖子，总浏览量: ${threadList.reduce((sum, item) => sum + item.read, 0)}`,
+        item: items,
+
     };
 }
 
 /**
  * 从HTML中提取window.$$data数据
  */
-function extractWindowDataFromHTML($: any): WindowData | null {
+function extractWindowData(html: string): WindowData | null {
     try {
-        // 查找包含window.$$data的script标签
-        const scripts = $('script').toArray();
+        const startMarker = 'window.$$data=';
+        const startIndex = html.indexOf(startMarker);
 
-        for (const script of scripts) {
-            const scriptContent = $(script).html();
-            if (scriptContent && scriptContent.includes('window.$$data')) {
-                // 提取JSON数据
-                const match = scriptContent.match(/window\.\$\$data\s*=\s*(\{[\s\S]*?\})(?:\s*;|\s*$)/);
+        if (startIndex === -1) {
+            console.log('未找到 window.$$data');
+            return null;
+        }
 
-                if (match) {
-                    try {
-                        // 清理JSON字符串
-                        let jsonStr = match[1]
-                            .replace(/,\s*}/g, '}')
-                            .replace(/,\s*]/g, ']')
-                            .replace(/\/\/.*$/gm, '') // 移除行注释
-                            .trim();
+        // 从开始位置向后提取JSON
+        let jsonStr = '';
+        let braceCount = 0;
+        let inString = false;
+        let escapeChar = false;
 
-                        // 修复可能的JSON格式问题
-                        jsonStr = fixJsonFormat(jsonStr);
+        // 找到JSON开始位置
+        let pos = startIndex + startMarker.length;
 
-                        const data = JSON.parse(jsonStr);
-                        return data as WindowData;
-                    } catch (jsonError) {
-                        console.error('解析window.$$data JSON失败:', jsonError);
-                        continue; // 尝试下一个script标签
-                    }
-                }
+        // 跳过空白字符
+        while (pos < html.length && /\s/.test(html[pos])) {
+            pos++;
+        }
+
+        // 验证第一个字符是否是 {
+        if (html[pos] !== '{') {
+            console.log('window.$$data 不是以 { 开头');
+            return null;
+        }
+
+        // 遍历提取完整的JSON
+        for (let i = pos; i < html.length; i++) {
+            const char = html[i];
+
+            // 处理转义字符
+            if (escapeChar) {
+                jsonStr += char;
+                escapeChar = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                jsonStr += char;
+                escapeChar = true;
+                continue;
+            }
+
+            if (char === '"' && !inString) {
+                inString = true;
+            } else if (char === '"' && inString) {
+                inString = false;
+            } else if (char === '{' && !inString) {
+                braceCount++;
+            } else if (char === '}' && !inString) {
+                braceCount--;
+            }
+
+            jsonStr += char;
+
+            // 当大括号匹配完成且不在字符串中时，JSON结束
+            if (braceCount === 0 && !inString) {
+                break;
+            }
+
+            // 安全限制
+            if (i - pos > 500000) {
+                console.log('JSON提取超出长度限制');
+                break;
             }
         }
 
-        // 如果没有找到window.$$data，尝试查找其他可能的数据变量
-        for (const script of scripts) {
-            const scriptContent = $(script).html();
-            if (scriptContent) {
-                // 尝试查找其他格式的数据
-                const matches = [
-                    ...scriptContent.matchAll(/var\s+__data\s*=\s*(\{[\s\S]*?\})(?:\s*;|\s*$)/g),
-                    ...scriptContent.matchAll(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\})(?:\s*;|\s*$)/g),
-                    ...scriptContent.matchAll(/window\.data\s*=\s*(\{[\s\S]*?\})(?:\s*;|\s*$)/g),
-                ];
+        // 尝试解析JSON
+        try {
+            const data = JSON.parse(jsonStr);
+            return data;
+        } catch (parseError) {
+            console.log('JSON解析失败，尝试修复:', parseError.message);
 
-                for (const match of matches) {
-                    try {
-                        let jsonStr = match[1]
-                            .replace(/,\s*}/g, '}')
-                            .replace(/,\s*]/g, ']')
-                            .trim();
-
-                        jsonStr = fixJsonFormat(jsonStr);
-                        const data = JSON.parse(jsonStr);
-
-                        // 检查数据结构是否包含我们需要的信息
-                        if (data.topic || data.threads) {
-                            return data as WindowData;
-                        }
-                    } catch (error) {
-                        continue;
-                    }
-                }
+            // 修复常见的JSON问题
+            const fixedJson = fixJsonString(jsonStr);
+            try {
+                const data = JSON.parse(fixedJson);
+                console.log('修复后成功解析 window.$$data');
+                return data;
+            } catch (secondError) {
+                console.log('修复后仍然解析失败:', secondError.message);
+                return null;
             }
         }
     } catch (error) {
         console.error('提取window.$$data失败:', error);
+        return null;
     }
-
-    return null;
 }
 
 /**
- * 修复JSON格式
+ * 修复JSON字符串
  */
-function fixJsonFormat(jsonStr: string): string {
-    // 添加更多修复逻辑
-    return jsonStr
-        .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3') // 为未加引号的键添加引号
-        .replace(/:\s*'([^']*)'/g, ':"$1"') // 将单引号转换为双引号
-        .replace(/:\s*true/g, ':true') // 修复布尔值
-        .replace(/:\s*false/g, ':false')
-        .replace(/:\s*null/g, ':null');
+function fixJsonString(jsonStr: string): string {
+    let result = jsonStr;
+
+    // 1. 移除尾随逗号
+    result = result.replace(/,\s*}/g, '}');
+    result = result.replace(/,\s*]/g, ']');
+
+    // 2. 修复未加引号的键
+    result = result.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
+
+    return result;
 }
 
-/**
- * 备选解析方式 - 从HTML结构中提取帖子
- */
-function extractThreadsFallback($: any): ThreadItem[] {
-    const threads: ThreadItem[] = [];
+// 如果你想要更简单的版本，直接返回原始数据：
+async function directJsonHandler(ctx) {
+    const currentUrl = 'https://bbs.hupu.com/topic-daily-hot';
 
-    // 从HTML中解析帖子列表
-    $('.bbs-sl-web-post-body').each((index, element) => {
-        const $el = $(element);
-
-        const titleLink = $el.find('.post-title a.p-title');
-        const title = titleLink.text().trim();
-        const url = titleLink.attr('href');
-        const datum = $el.find('.post-datum').text().trim();
-        const author = $el.find('.post-auth a').text().trim();
-        const timeText = $el.find('.post-time').text().trim();
-
-        // 解析回复/浏览数
-        let replyCount = 0;
-        let viewCount = 0;
-        if (datum) {
-            const [replyStr, viewStr] = datum.split(' / ');
-            replyCount = parseInt(replyStr) || 0;
-            viewCount = parseInt(viewStr?.replace(/[^\d]/g, '')) || 0;
-        }
-
-        // 提取可能的threadId
-        let threadId = '';
-        if (url) {
-            const match = url.match(/\/(\d+)\.html/);
-            threadId = match ? match[1] : '';
-        }
-
-        threads.push({
-            threadId: threadId || `fallback_${index}`,
-            title,
-            url,
-            replyCount,
-            viewCount,
-            author,
-            createTime: timeText,
-        });
+    const response = await got({
+        method: 'get',
+        url: currentUrl,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://bbs.hupu.com/',
+        },
     });
 
-    return threads;
+    const html = response.data;
+    const windowData = extractWindowData(html);
+
+    if (!windowData) {
+        throw new Error('无法从页面提取 window.$$data 数据');
+    }
+
+    const threadsData = windowData.topic?.threads;
+
+    if (!threadsData || !threadsData.list || threadsData.list.length === 0) {
+        throw new Error('未找到帖子数据');
+    }
+
+    // 直接返回 threadsData.list，保持原顺序
+    return {
+        success: true,
+        count: threadsData.list.length,
+        threads: threadsData.list, // 保持原始数组顺序
+        meta: {
+            pagination: {
+                count: threadsData.count,
+                size: threadsData.size,
+                current: threadsData.current,
+                total: threadsData.total,
+                baseUrl: threadsData.baseUrl,
+            },
+            source: 'window.$$data.topic.threads.list',
+        },
+    };
 }
 
-// 导出辅助函数供测试或其他模块使用
-export { extractWindowDataFromHTML, extractThreadsFallback };
+// 如果想在RSS格式中直接返回完整JSON：
+async function rssWithFullJsonHandler(ctx) {
+    const currentUrl = 'https://bbs.hupu.com/topic-daily-hot';
+
+    const response = await got({
+        method: 'get',
+        url: currentUrl,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://bbs.hupu.com/',
+        },
+    });
+
+    const html = response.data;
+    const windowData = extractWindowData(html);
+
+    if (!windowData) {
+        throw new Error('无法从页面提取 window.$$data 数据');
+    }
+
+    const threadsData = windowData.topic?.threads;
+    const threadList = threadsData?.list || [];
+
+    if (threadList.length === 0) {
+        throw new Error('未找到帖子数据');
+    }
+
+    // 创建一个包含所有数据的单个RSS条目
+    return {
+        title: '虎扑步行街主干道热帖数据',
+        link: currentUrl,
+        description: '虎扑步行街主干道完整帖子数据',
+        item: [
+            {
+                title: `虎扑步行街热帖 (${threadList.length}条)`,
+                link: currentUrl,
+                description: `
+                    <h3>数据统计</h3>
+                    <p>帖子数量: ${threadList.length}</p>
+                    <p>总浏览量: ${threadList.reduce((sum, item) => sum + item.read, 0)}</p>
+                    <p>总回复数: ${threadList.reduce((sum, item) => sum + item.replies, 0)}</p>
+                    <p>总点亮数: ${threadList.reduce((sum, item) => sum + item.lights, 0)}</p>
+
+                    <h3>完整JSON数据</h3>
+                    <pre><code>${JSON.stringify(threadList, null, 2)}</code></pre>
+                `,
+                pubDate: new Date(),
+                guid: `hupu_data_${Date.now()}`,
+            },
+        ],
+    };
+}
+
+// 导出函数
+export { extractWindowData };
