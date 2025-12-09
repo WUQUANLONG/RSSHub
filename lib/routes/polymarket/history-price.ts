@@ -172,13 +172,7 @@ function generatePriceDescription(priceData: any, marketId: string) {
     try {
         const jsonData = JSON.stringify(dataCopy, null, 2);
 
-        return `
-<div style="display: none;" class="raw-data">
-<!-- 原始价格数据开始 -->
-${jsonData}
-<!-- 原始价格数据结束 -->
-</div>
-        `.trim();
+        return jsonData
     } catch (error) {
         return generateFormattedPriceDescription(priceData);
     }
