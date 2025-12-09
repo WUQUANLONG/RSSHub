@@ -172,7 +172,7 @@ function generatePriceDescription(priceData: any, marketId: string) {
     try {
         const jsonData = JSON.stringify(dataCopy, null, 2);
 
-        return jsonData
+        return jsonData;
     } catch (error) {
         return generateFormattedPriceDescription(priceData);
     }
