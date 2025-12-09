@@ -91,6 +91,10 @@ interface WindowData {
 }
 
 async function handler(ctx) {
+    // { id: 2, title: '最新回复', url: '/topic-daily' },
+    // { id: 1, title: '最新发布', url: '/topic-daily-postdate' },
+    // { id: 4, title: '24小时榜', url: '/topic-daily-hot' }
+    // 请求的 url 可以改变
     const currentUrl = 'https://bbs.hupu.com/topic-daily-hot';
     // 请求页面
     const response = await got({
@@ -98,7 +102,9 @@ async function handler(ctx) {
         url: currentUrl,
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            Referer: 'https://bbs.hupu.com/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Referer': 'https://bbs.hupu.com/',
         },
     });
 
