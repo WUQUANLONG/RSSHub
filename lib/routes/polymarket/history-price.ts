@@ -122,7 +122,7 @@ function processPriceHistory(priceData: any, marketId: string) {
             items.push({
                 title: `价格数据点 ${index + 1} - 市场 ${marketId}`,
                 link: `https://polymarket.com/market/${marketId}`,
-                description: generatePriceDescription(dataPoint, marketId),
+                description: priceData,
                 pubDate: parseDate(dataPoint.timestamp || dataPoint.ts || dataPoint.time || Date.now()),
                 category: ['price-history', 'polymarket'],
                 guid: `price-${marketId}-${dataPoint.timestamp || index}-${Date.now()}`,
@@ -134,7 +134,7 @@ function processPriceHistory(priceData: any, marketId: string) {
             items.push({
                 title: `价格点 ${index + 1} - ${marketId}`,
                 link: `https://polymarket.com/market/${marketId}`,
-                description: generatePriceDescription(pricePoint, marketId),
+                description: priceData,
                 pubDate: parseDate(pricePoint.timestamp || pricePoint.ts || index),
                 category: ['price-history', 'polymarket'],
                 guid: `price-${marketId}-${pricePoint.timestamp || index}`,
@@ -145,7 +145,7 @@ function processPriceHistory(priceData: any, marketId: string) {
         items.push({
             title: `价格历史 - 市场 ${marketId}`,
             link: `https://polymarket.com/market/${marketId}`,
-            description: generatePriceDescription(priceData, marketId),
+            description: priceData,
             pubDate: parseDate(priceData.timestamp || priceData.ts || Date.now()),
             category: ['price-history', 'polymarket'],
             guid: `price-${marketId}-${Date.now()}`,
@@ -155,7 +155,7 @@ function processPriceHistory(priceData: any, marketId: string) {
         items.push({
             title: `价格历史数据 - 市场 ${marketId}`,
             link: `https://polymarket.com/market/${marketId}`,
-            description: `原始价格数据: ${JSON.stringify(priceData, null, 2)}`,
+            description: priceData,
             pubDate: parseDate(Date.now()),
             category: ['price-history', 'polymarket'],
             guid: `price-${marketId}-raw-${Date.now()}`,

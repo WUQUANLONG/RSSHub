@@ -112,22 +112,14 @@ async function handler(ctx) {
     // 添加处理后的数据到描述中
     if (feedItems.length > 0 && dataWithoutUser) {
         feedItems.forEach((item, index) => {
-            const tweetData = dataWithoutUser[index];
-            if (tweetData) {
-                const originalDescription = item.description || '';
-                const rawDataHtml = `
-<div style="display: none;" class="raw-tweet-data">
-<!-- 处理后的推文数据（不含用户信息） -->
-${JSON.stringify(tweetData, null, 2)}
-</div>
-${originalDescription}
-                `.trim();
+            let tweetData = dataWithoutUser[index];
 
-                item.description = rawDataHtml;
+            if (tweetData) {
+                item.description = tweetData;
             }
         });
     }
-
+    console.log('ssss', feedItems);
     return {
         title: `Twitter @${userInfo?.name}`,
         link: `https://x.com/${userInfo?.screen_name}`,

@@ -119,7 +119,7 @@ async function handler(ctx) {
         const items = itemList.map((item) => ({
             title: item.title || `Event: ${item.id}`,
             link: `https://polymarket.com/event/${item.slug || item.id}`,
-            description: generateItemDescription(item),
+            description: item,
             pubDate: parseDate(item.createdAt || item.startDate),
             category: item.tags ? [item.tags] : [],
             guid: item.id,
