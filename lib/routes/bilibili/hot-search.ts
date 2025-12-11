@@ -1,5 +1,6 @@
 import { Route } from '@/types';
 import got from '@/utils/got';
+import { formatDate } from '@/utils/parse-date';
 import cache from './cache';
 import utils from './utils';
 
@@ -111,10 +112,12 @@ async function handler(ctx) {
 
             return {
                 title: item.keyword,
-                description: JSON.stringify(item, null, 2),
+                //description: JSON.stringify(item, null, 2),
+                description: item,
                 link,
                 guid: `bilibili-hotsearch-${item.keyword}-${item.heat_score}`,
-                pubDate: new Date().toUTCString(),
+                // 这个热榜没有上榜时间
+                pubDate: formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss'),
             };
         });
 

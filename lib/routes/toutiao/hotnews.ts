@@ -116,12 +116,12 @@ async function handler(ctx) {
 
                 // 构造描述
 
-                const description = JSON.stringify(item, null, 2);
+                //const description = JSON.stringify(item, null, 2);
 
                 items.push({
                     title: `${index + 1}. ${title}`,
                     link: link,
-                    description: description,
+                    description: item,
                     pubDate: parseDate(new Date()),
                     guid: `toutiao-hot-${item.ClusterIdStr || index}-${Date.now()}`,
                     category: item.InterestCategory,
@@ -135,12 +135,12 @@ async function handler(ctx) {
 
                     const title = `🔝 ${item.Title}`;
                     const link = item.Url || `${baseUrl}/trending/${item.ClusterIdStr || item.ClusterId}/`;
-                    const description = JSON.stringify(item, null, 2);
+                    // const description = JSON.stringify(item, null, 2);
 
                     items.push({
                         title: title,
                         link: link,
-                        description: description,
+                        description: item,
                         pubDate: parseDate(new Date()),
                         guid: `toutiao-fixed-${item.ClusterIdStr || index}-${Date.now()}`,
                     });

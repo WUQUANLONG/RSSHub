@@ -5,6 +5,7 @@ import { getDataWithPuppeteer, generateRandomString, getSearchApiCookies} from '
 
 // 导入本地工具
 import { get_md5_1038 } from './md5_utils';
+import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 export const route: Route = {
     path: '/search',
@@ -141,16 +142,13 @@ function processApiData(data: any, q: string) {
         if (item.created_at) {
             pubDate = new Date(item.created_at);
         }
+        item.text = decodeAndExtractText(text);
 
         return {
-            title,
-            description: `
-                <p>${text.replace(/\n/g, '<br>')}</p>
-                ${pubDate ? `<p><small>发布时间: ${pubDate.toLocaleString('zh-CN')}</small></p>` : ''}
-                ${item.user ? `<p><small>作者: ${item.user.screen_name || item.user.name || '未知'}</small></p>` : ''}
-            `,
-            link,
-            pubDate,
+            title: decodeAndExtractText(title),
+            description: item,
+            url: link,
+            pubData: pubDate,
             author: item.user?.screen_name || item.user?.name || '雪球用户',
             guid: item.id,
             id: item.id,

@@ -38,7 +38,7 @@ async function handler(ctx) {
 
     const response = await got({
         method: 'get',
-        url: `https://api.zhihu.com/topstory/hot-lists/total?limit=10&reverse_order=0`,
+        url: `https://api.zhihu.com/topstory/hot-lists/total?limit=50&reverse_order=0`,
         headers: {
             Cookie: cookie,
         },
@@ -55,7 +55,7 @@ async function handler(ctx) {
             link: `https://www.zhihu.com/question/${questionId}`,
             title: item.target.title,
             pubDate: parseDate(item.target.created * 1000),
-            description: `${JSON.stringify(targetWithDetail, null, 2)}`,
+            description: targetWithDetail,
         };
     });
 

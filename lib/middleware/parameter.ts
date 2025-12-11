@@ -84,100 +84,102 @@ const middleware: MiddlewareHandler = async (ctx, next) => {
         //     data.item = data.item.toSorted((a: DataItem, b: DataItem) => +new Date(b.pubDate || 0) - +new Date(a.pubDate || 0));
         // }
 
-        const handleItem = (item: DataItem) => {
-            item.title && (item.title = entities.decodeXML(item.title + ''));
-
-            // handle pubDate
-            if (item.pubDate) {
-                item.pubDate = new Date(item.pubDate).toUTCString();
-            }
-
-            // handle link
-            if (item.link) {
-                let baseUrl = data.link;
-                if (baseUrl && !/^https?:\/\//.test(baseUrl)) {
-                    baseUrl = /^\/\//.test(baseUrl) ? 'http:' + baseUrl : 'http://' + baseUrl;
-                }
-
-                item.link = new URL(item.link, baseUrl).href;
-            }
-
-            // handle description
-            if (item.description) {
-                const $ = load(item.description);
-                let baseUrl = item.link || data.link;
-
-                if (baseUrl && !/^https?:\/\//.test(baseUrl)) {
-                    baseUrl = /^\/\//.test(baseUrl) ? 'http:' + baseUrl : 'http://' + baseUrl;
-                }
-
-                $('script').remove();
-
-                $('img').each((_, ele) => {
-                    const $ele = $(ele);
-
-                    // fix lazyload
-                    if (!$ele.attr('src')) {
-                        const lazySrc = $ele.attr('data-src') || $ele.attr('data-original');
-                        if (lazySrc) {
-                            $ele.attr('src', lazySrc);
-                        } else {
-                            for (const key in ele.attribs) {
-                                const value = ele.attribs[key].trim();
-                                if (['.gif', '.png', '.jpg', '.webp'].some((suffix) => value.includes(suffix))) {
-                                    $ele.attr('src', value);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    // redundant attributes
-                    for (const e of ['onclick', 'onerror', 'onload']) {
-                        $ele.removeAttr(e);
-                    }
-                });
-
-                // resolve relative link & fix referrer policy
-                // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy
-                // https://www.w3schools.com/tags/att_href.asp
-                $('a, area').each((_, elem) => {
-                    resolveRelativeLink($, elem, 'href', baseUrl);
-                    // $(elem).attr('rel', 'noreferrer');  // currently no such a need
-                });
-                // https://www.w3schools.com/tags/att_src.asp
-                $('img, video, audio, source, iframe, embed, track').each((_, elem) => {
-                    resolveRelativeLink($, elem, 'src', baseUrl);
-                });
-                $('video[poster]').each((_, elem) => {
-                    resolveRelativeLink($, elem, 'poster', baseUrl);
-                });
-                $('img, iframe').each((_, elem) => {
-                    if (!$(elem).attr('referrerpolicy')) {
-                        $(elem).attr('referrerpolicy', 'no-referrer');
-                    }
-                });
-
-                item.description = $('body').html() + '' + (config.suffix || '');
-
-                if (item._extra?.links && $('.rsshub-quote').length) {
-                    item._extra?.links?.map((e) => {
-                        e.content_html = $.html($('.rsshub-quote'));
-                        return e;
-                    });
-                }
-            }
-
-            // handle category
-            if (item.category) {
-                // convert single string to array, and filter only string type category
-                Array.isArray(item.category) || (item.category = [item.category]);
-                item.category = item.category.filter((e) => typeof e === 'string');
-            }
-            return item;
-        };
-
-        data.item = await Promise.all(data.item.map((itm) => handleItem(itm)));
+        // 不做中间处理，全部交给路由处理
+        // const handleItem = (item: DataItem) => {
+        //     item.title && (item.title = entities.decodeXML(item.title + ''));
+        //
+        //     // handle pubDate
+        //     // 因为涉及到不同地区，时间不做处理
+        //     // if (item.pubDate) {
+        //     //     item.pubDate = new Date(item.pubDate).toUTCString();
+        //     // }
+        //
+        //     // handle link
+        //     if (item.link) {
+        //         let baseUrl = data.link;
+        //         if (baseUrl && !/^https?:\/\//.test(baseUrl)) {
+        //             baseUrl = /^\/\//.test(baseUrl) ? 'http:' + baseUrl : 'http://' + baseUrl;
+        //         }
+        //
+        //         item.link = new URL(item.link, baseUrl).href;
+        //     }
+        //
+        //     // handle description
+        //     if (item.description) {
+        //         const $ = load(item.description);
+        //         let baseUrl = item.link || data.link;
+        //
+        //         if (baseUrl && !/^https?:\/\//.test(baseUrl)) {
+        //             baseUrl = /^\/\//.test(baseUrl) ? 'http:' + baseUrl : 'http://' + baseUrl;
+        //         }
+        //
+        //         $('script').remove();
+        //
+        //         $('img').each((_, ele) => {
+        //             const $ele = $(ele);
+        //
+        //             // fix lazyload
+        //             if (!$ele.attr('src')) {
+        //                 const lazySrc = $ele.attr('data-src') || $ele.attr('data-original');
+        //                 if (lazySrc) {
+        //                     $ele.attr('src', lazySrc);
+        //                 } else {
+        //                     for (const key in ele.attribs) {
+        //                         const value = ele.attribs[key].trim();
+        //                         if (['.gif', '.png', '.jpg', '.webp'].some((suffix) => value.includes(suffix))) {
+        //                             $ele.attr('src', value);
+        //                             break;
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //
+        //             // redundant attributes
+        //             for (const e of ['onclick', 'onerror', 'onload']) {
+        //                 $ele.removeAttr(e);
+        //             }
+        //         });
+        //
+        //         // resolve relative link & fix referrer policy
+        //         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy
+        //         // https://www.w3schools.com/tags/att_href.asp
+        //         $('a, area').each((_, elem) => {
+        //             resolveRelativeLink($, elem, 'href', baseUrl);
+        //             // $(elem).attr('rel', 'noreferrer');  // currently no such a need
+        //         });
+        //         // https://www.w3schools.com/tags/att_src.asp
+        //         $('img, video, audio, source, iframe, embed, track').each((_, elem) => {
+        //             resolveRelativeLink($, elem, 'src', baseUrl);
+        //         });
+        //         $('video[poster]').each((_, elem) => {
+        //             resolveRelativeLink($, elem, 'poster', baseUrl);
+        //         });
+        //         $('img, iframe').each((_, elem) => {
+        //             if (!$(elem).attr('referrerpolicy')) {
+        //                 $(elem).attr('referrerpolicy', 'no-referrer');
+        //             }
+        //         });
+        //
+        //         item.description = $('body').html() + '' + (config.suffix || '');
+        //
+        //         if (item._extra?.links && $('.rsshub-quote').length) {
+        //             item._extra?.links?.map((e) => {
+        //                 e.content_html = $.html($('.rsshub-quote'));
+        //                 return e;
+        //             });
+        //         }
+        //     }
+        //
+        //     // handle category
+        //     if (item.category) {
+        //         // convert single string to array, and filter only string type category
+        //         Array.isArray(item.category) || (item.category = [item.category]);
+        //         item.category = item.category.filter((e) => typeof e === 'string');
+        //     }
+        //     return item;
+        // };
+        //
+        // data.item = await Promise.all(data.item.map((itm) => handleItem(itm)));
 
         // filter
         const engine = config.feature.filter_regex_engine;

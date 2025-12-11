@@ -8,6 +8,7 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
+import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 export const route: Route = {
     path: '/hot',
@@ -60,12 +61,13 @@ async function handler(ctx) {
                 });
                 const content = load(detailResponse.data);
                 const nextData = JSON.parse(content('script#__NEXT_DATA__').text());
-                const articleDetail = nextData.props.initialState.detail.articleDetail;
-                item.description = art(path.join(__dirname, 'templates/depth.art'), {
-                    articleDetail,
-                });
-                item.author = articleDetail.author?.name ?? item.author ?? '';
+                let articleDetail = nextData.props.initialState.detail.articleDetail;
+                if (articleDetail.content) {
+                    articleDetail.content = decodeAndExtractText(articleDetail.content);
+                }
 
+                item.description = articleDetail;
+                item.author = articleDetail.author?.name ?? item.author ?? '';
 
                 return item;
             })

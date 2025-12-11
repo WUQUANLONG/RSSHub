@@ -1,6 +1,11 @@
 import { Route } from '@/types';
 import utils from './utils';
 import got from '@/utils/got';
+import {load} from "cheerio";
+import cache from "@/utils/cache";
+import {rootUrl} from "@/routes/cls/utils";
+import {parseDate} from "@/utils/parse-date";
+import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 const sections = {
     hotNews: '澎湃热榜',
@@ -57,24 +62,40 @@ async function handler(ctx) {
             throw new Error(`No data found for section '${sec}'`);
         }
 
-        const items = list.map(item => {
-            // 确保必要字段存在
-            if (!item.contId || !item.name) {
-                console.warn('Invalid item found:', item);
-                return null;
-            }
+        let items = list.map((item) => ({
+            title: item.title || item.name,
+            link: `https://www.thepaper.cn/newsDetail_forward_${item.contId}`,
+            pubDate: item.pubTimeLong ? new Date(item.pubTimeLong).toISOString() : new Date().toISOString(),
+        }));
 
-            return {
-                id: item.contId,
-                link: `https://www.thepaper.cn/newsDetail_forward_${item.contId}`,
-                title: item.name,
-                pubDate: item.pubTimeLong ? new Date(item.pubTimeLong).toISOString() : new Date().toISOString(),
-                description: item.name,
-                // 可以添加更多字段
-                author: item.nodeInfo?.name || '澎湃新闻',
-                category: item.nodeInfo?.name || '新闻',
-            };
-        }).filter(Boolean); // 过滤掉 null 的项
+        items = await Promise.all(
+            items.map((item) =>
+                cache.tryGet(item.link, async () => {
+
+                    const detailResponse = await got({
+                        method: 'get',
+                        url: item.link,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Referer': 'https://www.thepaper.cn/',
+                            'Accept': 'application/json, text/plain, */*',
+                        }
+                    });
+                    const content = load(detailResponse.data);
+                    const nextData = JSON.parse(content('script#__NEXT_DATA__').text());
+                    let articleDetail = nextData.props.pageProps.detailData.contentDetail;
+                    if (articleDetail.content) {
+                        articleDetail.content = decodeAndExtractText(articleDetail.content);
+                    }
+
+                    item.description = articleDetail;
+                    item.author = articleDetail.author?.name ?? item.author ?? '';
+
+                    return item;
+                })
+            )
+        );
+
 
         // 再次检查 items 是否为空
         if (items.length === 0) {

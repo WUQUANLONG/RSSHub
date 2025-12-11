@@ -133,7 +133,7 @@ async function handler(ctx) {
     const items = itemList.map((item) => ({
         title: item.title || `文章: ${item.stock_name}`,
         link: `https://www.jiuyangongshe.com/article/${item.article_id}`,
-        description: generateItemDescription(item),
+        description: item,
         pubDate: parseDate(item.create_time),
         author: item.nickname || undefined,
         guid: `jiuyangongshe-article-plan-${item.article_id}`,
@@ -148,45 +148,3 @@ async function handler(ctx) {
     };
 }
 
-function generateItemDescription(item: ArticlePlanItem): string {
-    const descriptionParts = [];
-
-    // 添加标题
-    if (item.title) {
-        descriptionParts.push(`<h3>${item.title}</h3>`);
-    }
-
-    // 添加股票名称
-    if (item.stock_name) {
-        descriptionParts.push(`<p><strong>股票名称:</strong> ${item.stock_name}</p>`);
-    }
-
-    // 添加内容
-    if (item.content) {
-        const contentPreview = item.content.length > 300 ? `${item.content.slice(0, 300)}...` : item.content;
-        descriptionParts.push(`<div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px;">${contentPreview.replaceAll('\n', '<br/>')}</div>`);
-    }
-
-    // 添加热度信息
-    const stats = [];
-    if (item.total_hot) {stats.push(`总热度: ${item.total_hot}`);}
-    if (item.like_count) {stats.push(`点赞: ${item.like_count}`);}
-    if (item.forward_count) {stats.push(`转发: ${item.forward_count}`);}
-    if (item.comment_count) {stats.push(`评论: ${item.comment_count}`);}
-    if (item.browsers_count) {stats.push(`浏览: ${item.browsers_count}`);}
-    if (stats.length > 0) {
-        descriptionParts.push(`<p><small>${stats.join(' | ')}</small></p>`);
-    }
-
-    // 添加作者信息
-    if (item.nickname) {
-        descriptionParts.push(`<p><small>作者: ${item.nickname}</small></p>`);
-    }
-
-    // 添加发布时间
-    if (item.create_time) {
-        descriptionParts.push(`<p><small>发布时间: ${item.create_time}</small></p>`);
-    }
-
-    return descriptionParts.join('');
-}

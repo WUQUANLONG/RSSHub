@@ -1,5 +1,5 @@
 import { Data } from '@/types';
-
+import { formatDate } from '@/utils/parse-date';
 /**
  * This function should be used by RSSHub middleware only.
  * @param {object} data ctx.state.data
@@ -23,8 +23,8 @@ const json = (data: Data) => {
             content_text: item.content && item.content.text,
             image: item.image || item.itunes_item_image,
             banner_image: item.banner,
-            date_published: item.pubDate,
-            date_modified: item.updated,
+            date_published: item.pubDate? formatDate(new Date(item.pubDate), 'YYYY-MM-DD HH:mm:ss') : '',
+            date_modified: item.updated? formatDate(new Date(item.updated), 'YYYY-MM-DD HH:mm:ss'): '',
             authors: typeof item.author === 'string' ? [{ name: item.author }] : item.author,
             tags: typeof item.category === 'string' ? [item.category] : item.category,
             language: item.language,

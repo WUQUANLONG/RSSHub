@@ -2,6 +2,7 @@ import { Route } from '@/types';
 import cache from '@/utils/cache';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
+import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 export const route: Route = {
     path: '/hot/:period?',
@@ -53,11 +54,14 @@ async function handler(ctx) {
                     url: `${apiRootUrl}/apiv1/content/articles/${item.guid}?extract=0`,
                 });
 
-                const data = detailResponse.data.data;
+                let data = detailResponse.data.data;
 
                 item.title = data.title || data.content_text;
                 item.author = data.source_name ?? data.author.display_name;
-                item.description = data.content + (data.content_more ?? '');
+
+                let content = data.content + (data.content_more ?? '');
+                data.content = decodeAndExtractText(content);
+                item.description = data;
                 item.category = data.asset_tags?.map((t) => t.name) ?? [];
 
                 if (data.audio_uri) {

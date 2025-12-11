@@ -3,7 +3,7 @@ import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 import logger from '@/utils/logger';
 import { getDataWithPuppeteer, generateRandomString} from './cookies2';
-
+import {decodeAndExtractText} from "@/utils/parse-html-content";
 // 导入本地工具
 import { get_md5_1038 } from './md5_utils';
 
@@ -122,9 +122,9 @@ async function handler(ctx) {
         }
 
         // 处理新闻文本
-        const text = item.text || '';
+        let text = item.text || '';
         const title = text.length > 100 ? text.substring(0, 100) + '...' : text || `新闻 ${item.id}`;
-
+        item.text = decodeAndExtractText(text);
         // 格式化发布时间
         let pubDate;
         if (item.created_at) {
@@ -133,10 +133,7 @@ async function handler(ctx) {
 
         return {
             title,
-            description: `
-                <p>${text.replace(/\n/g, '<br>')}</p>
-                ${pubDate ? `<p><small>发布时间: ${pubDate.toLocaleString()}</small></p>` : ''}
-            `,
+            description: item,
             link,
             pubDate,
             author: '雪球财经',

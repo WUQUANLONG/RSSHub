@@ -24,7 +24,7 @@ export const route: Route = {
         },
     ],
     name: '热帖',
-    maintainers: ['hillerliao'],
+    maintainers: ['wuquanlong'],
     handler,
     url: 'xueqiu.com/',
 };

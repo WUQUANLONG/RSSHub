@@ -7,7 +7,7 @@ import { parseDate } from '@/utils/parse-date';
 
 export const handler = async (ctx) => {
     const { tag } = ctx.req.param();
-    const limit = ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit'), 10) : 20;
+    const limit = ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit'), 20) : 50;
 
     const rootUrl = 'https://news.10jqka.com.cn';
     const apiUrl = new URL('tapp/news/push/stock', rootUrl).href;
@@ -35,19 +35,17 @@ export const handler = async (ctx) => {
             const guid = `10jqka-${item.seq}`;
             const image = item.picUrl;
 
+            item.ctime = parseDate(item.ctime, 'X');
+            item.rtime = parseDate(item.rtime, 'X');
             return {
                 title,
-                description,
+                description: item,
                 pubDate: parseDate(item.ctime, 'X'),
                 link: item.url,
                 category: [...new Set([item.color === '2' ? '重要' : undefined, ...item.tags.map((c) => c.name), ...item.tagInfo.map((c) => c.name)])].filter(Boolean),
                 author: item.source,
                 guid,
                 id: guid,
-                content: {
-                    html: '',
-                    text: description,
-                },
                 image,
                 banner: item.picUrl,
                 updated: parseDate(item.rtime, 'X'),
@@ -60,7 +58,6 @@ export const handler = async (ctx) => {
 
     return {
         title,
-        description: title.split(/_/).pop(),
         link: currentUrl,
         item: items,
         allowEmpty: true,

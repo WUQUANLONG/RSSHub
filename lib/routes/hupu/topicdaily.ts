@@ -2,7 +2,7 @@ import { Route } from '@/types';
 
 import got from '@/utils/got';
 import sanitizeHtml from "sanitize-html";
-import {parseDate} from "@/utils/parse-date";
+import {formatDate} from "@/utils/parse-date";
 
 export const route: Route = {
     path: '/zhugandao/topic',
@@ -129,12 +129,16 @@ async function handler(ctx) {
     //console.log(`成功提取到 ${threadList.length} 条帖子`);
 
     const items = threadList.map((thread) => {
+        if (thread.createdAt) {
+            thread.createdAt = formatDate(new Date(thread.createdAt), 'YYYY-MM-DD HH:mm:ss');
+        }
+
         return {
             title: thread.title,
             link: `https://bbs.hupu.com${thread.url}`,
-            description: JSON.stringify(thread, null, 2), // 深度JSON化
+            description: thread,
             author: thread.author?.username || thread.author?.nickname || '匿名用户',
-            pubDate: new Date(thread.createdAt),
+            pubDate: formatDate(new Date(thread.createdAt), 'YYYY-MM-DD HH:mm:ss'),
             guid: `hupu_${thread.tid}`,
             category: ['步行街主干道'],
         };

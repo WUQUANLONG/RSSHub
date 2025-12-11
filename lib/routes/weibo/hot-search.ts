@@ -98,7 +98,7 @@ async function handler() {
             // 为每个热搜创建独立的条目
             const items = realtimeList.map((item, index) => ({
                 title: `微博热搜 ${index + 1}`,
-                description: JSON.stringify(item, null, 2),
+                description: item,
                 link: item.word_scheme
                     ? `https://s.weibo.com/${item.word_scheme}`
                     : `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word)}`,
@@ -121,7 +121,7 @@ async function handler() {
                 item: [
                     {
                         title: '微博热搜数据',
-                        description: JSON.stringify(data, null, 2),
+                        description: data,
                         link: 'https://weibo.com/hot/search',
                         pubDate: parseDate(timestamp),
                     }
@@ -146,7 +146,7 @@ async function handler() {
             link: 'https://weibo.com/hot/search',
             item: [{
                 title: '获取微博热搜失败',
-                description: JSON.stringify(errorData, null, 2),
+                description: errorData,
                 link: 'https://weibo.com/hot/search',
                 pubDate: parseDate(Date.now()),
             }],

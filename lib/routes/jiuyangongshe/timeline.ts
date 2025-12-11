@@ -112,17 +112,35 @@ async function handler() {
     }
 
     // Flatten the nested structure - each date item contains a list of articles
-    const items = itemList.flatMap((dateItem) =>
-        dateItem.list.map((item) => ({
-            title: item.title || `文章: ${item.article_id}`,
-            link: ``,
-            description: generateItemDescription(item),
-            pubDate: parseDate(item.create_time),
-            category: item.keyword ? [item.keyword] : undefined,
-            author: item.user?.nickname || undefined,
-            guid: item.article_id,
-        }))
-    );
+    const items = itemList.flatMap((dateItem) => {
+        // 防御性编程：确保 dateItem 和 list 存在
+        if (!dateItem?.list || !Array.isArray(dateItem.list)) {
+            console.warn('Invalid dateItem structure:', dateItem);
+            return [];
+        }
+
+        return dateItem.list.map((item) => {
+            // 确保 item 有必要的属性
+            if (!item) {
+                console.warn('Empty item found in list');
+                return null;
+            }
+            item.date = dateItem.date;
+            try {
+                return {
+                    title: item.title || item.article_id || 'Untitled',
+                    description: item,
+                    pubDate: parseDate(item.create_time),
+                    category: item.keyword ? [item.keyword.trim()] : undefined,
+                    author: item.user?.nickname?.trim() || undefined,
+                    guid: item.article_id || `unknown-${Date.now()}-${Math.random()}`,
+                };
+            } catch (error) {
+                console.error('Error processing item:', item, error);
+                return null;
+            }
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
+    });
 
     return {
         title: '时间轴 - 韭研公社',
@@ -131,71 +149,4 @@ async function handler() {
         language: 'zh-cn',
         item: items,
     };
-}
-
-// 根据时间轴项目生成描述
-function generateItemDescription(item: ResultItemList): string {
-    const descriptionParts = [];
-
-    // 添加标题
-    if (item.title) {
-        const titleStyle = [];
-        if (item.timeline?.title_red === 1) {titleStyle.push('color: red;');}
-        if (item.timeline?.title_bold === 1) {titleStyle.push('font-weight: bold;');}
-
-        const styleAttr = titleStyle.length > 0 ? ` style="${titleStyle.join(' ')}"` : '';
-        descriptionParts.push(`<h3${styleAttr}>${item.title}</h3>`);
-    }
-
-    // 添加关键词
-    if (item.keyword) {
-        descriptionParts.push(`<p><strong>关键词:</strong> ${item.keyword}</p>`);
-    }
-
-    // 添加作者
-    if (item.user?.nickname) {
-        descriptionParts.push(`<p><strong>作者:</strong> ${item.user.nickname}</p>`);
-    }
-
-    // 添加图片
-    if (item.imgs && item.imgs !== '[]') {
-        try {
-            const imgs = JSON.parse(item.imgs);
-            if (Array.isArray(imgs) && imgs.length > 0) {
-                for (const img of imgs) {
-                    if (img) {
-                        descriptionParts.push(`<p><img src="${img}" alt="图片" style="max-width: 100%; height: auto;" /></p>`);
-                    }
-                }
-            }
-        } catch {
-            // 如果JSON解析失败，忽略图片
-        }
-    }
-
-    // 添加内容预览
-    if (item.content) {
-        const contentPreview = item.content.length > 300 ? `${item.content.slice(0, 300)}...` : item.content;
-        descriptionParts.push(`<div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px;">${contentPreview.replaceAll('\n', '<br/>')}</div>`);
-    }
-
-    // 添加统计信息
-    const stats = [];
-    if (item.forward_count) {stats.push(`转发: ${item.forward_count}`);}
-    if (item.browsers_count) {stats.push(`浏览: ${item.browsers_count}`);}
-    if (stats.length > 0) {
-        descriptionParts.push(`<p><small>${stats.join(' | ')}</small></p>`);
-    }
-
-    // 添加置顶标识
-    if (item.is_top === 1) {
-        descriptionParts.push('<p><strong>🔝 置顶</strong></p>');
-    }
-
-    // 添加创建时间
-    if (item.create_time) {
-        descriptionParts.push(`<p><small>发布时间: ${item.create_time}</small></p>`);
-    }
-
-    return descriptionParts.join('');
 }

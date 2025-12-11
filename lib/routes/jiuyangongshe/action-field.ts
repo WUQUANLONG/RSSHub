@@ -228,9 +228,6 @@ async function handler(ctx) {
         // 过滤掉没有list或count为0的项目
         const items = [];
 
-        // 1. 收集所有需要并行处理的文章任务
-        const articlePromises = [];
-
         for (const item of dataList) {
             if (item.count > 0 && item.list && item.list.length > 0) {
                 // 分类主条目（同步处理）
@@ -238,42 +235,16 @@ async function handler(ctx) {
                     // title: `${item.name} (${item.count}个)` || `题材: ${item.action_field_id}`,
                     title: item.name ? `${item.name} (${item.count}个)` : `题材: ${item.action_field_id}`,
                     link: `https://www.jiuyangongshe.com/actionField?date=${date}&id=${item.action_field_id}`,
-                    description: generateCategoryDescription(item),
+                    description: item,
                     pubDate: parseDate(`${item.date} 00:00:00`),
                     category: [item.name],
                     guid: `jiuyangongshe-action-field-${item.action_field_id}-${item.date}`,
                 });
-
-                for (const article of item.list) {
-                    // 使用function声明的IIFE
-                    articlePromises.push(
-                        (async function () {
-                            const description = await renderArticleDescription(article);
-
-                            return {
-                                title: generateArticleTitle(article),
-                                link: `https://www.jiuyangongshe.com/article/${article.article.article_id}?from=timeline&channelId=${item.action_field_id}&date=${date}&code=${article.code}&name=${encodeURIComponent(article.name)}&type=1`,
-                                description,
-                                pubDate: parseDate(article.article.create_time),
-                                category: [item.name, `价格: ¥${article.article.action_info.price / 100}`],
-                                author: article.article.user.nickname || undefined,
-                                guid: `jiuyangongshe-article-${article.article.article_id}`,
-                            };
-                        })()
-                    );
-                }
             }
-    }
-
-
-        // 2. 并行执行所有文章处理任务
-        const articleItems = await Promise.all(articlePromises);
-
-        // 3. 合并结果
-        items.push(...articleItems);
+        }
 
         return {
-            title: `题材概念 - 韭研公社`,
+            title: `异动 - 韭研公社`,
             link: 'https://www.jiuyangongshe.com/actionField',
             description: '韭研公社-研究共享，茁壮成长（原韭菜公社）题材概念',
             language: 'zh-cn',
@@ -293,28 +264,6 @@ function formatToday(): string {
     return `${year}-${month}-${day}`;
 }
 
-function generateCategoryDescription(item: DataItem): string {
-    const descriptionParts = [ `<h3>${item.name} 题材</h3>`, `<p><strong>数量:</strong> ${item.count} 个相关股票</p>`];
-
-
-    if (item.reason) {
-        descriptionParts.push(`<p><strong>原因:</strong> ${item.reason}</p>`);
-    }
-
-    if (item.list && item.list.length > 0) {
-        descriptionParts.push('<p><strong>相关股票:</strong></p>', '<ul>');
-        for (const article of item.list.slice(0, 5)) {
-            // 只显示前5个股票
-            descriptionParts.push(`<li><a href="https://www.jiuyangongshe.com/article/${article.article.article_id}">${article.name} (${article.code})</a></li>`);
-        }
-        if (item.list.length > 5) {
-            descriptionParts.push(`<li>... 及其他 ${item.list.length - 5} 个股票</li>`);
-        }
-        descriptionParts.push('</ul>');
-    }
-
-    return descriptionParts.join('');
-}
 
 function generateArticleTitle(article: Article): string {
     const actionInfo = article.article.action_info;

@@ -107,19 +107,14 @@ async function handler() {
             const position = item.position || index + 1;
 
             // 简化的描述：直接JSON化item
-            const description = JSON.stringify(item, null, 2);
-
-            // 或者为了更好的可读性，可以这样格式化：
-            // const description = `<pre>${JSON.stringify(item, null, 2)}</pre>`;
+            // const description = JSON.stringify(item, null, 2);
 
             return {
                 title: `${position}. ${item.word}`,
                 link: `${baseUrl}/search/${encodeURIComponent(item.word)}?type=general`,
-                description: description,
+                description: item,
                 pubDate: parseDate(new Date()),
                 guid: `douyin-hot-${item.sentence_id || index}-${data.timestamp}`,
-                // 如果需要，可以把item的字段也单独提取出来
-                _extra: item,
             };
         });
 

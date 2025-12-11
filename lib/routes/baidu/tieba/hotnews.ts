@@ -51,7 +51,7 @@ async function handler() {
             title: `${item.idx_num || '?'}. ${item.topic_name}`,
             link: item.topic_url?.replace(/&amp;/g, '&') ||
                 `https://tieba.baidu.com/hottopic/browse/hottopic?topic_id=${item.topic_id}`,
-            description: JSON.stringify(item, null, 2),
+            description: item,
             pubDate: parseDate(item.create_time * 1000),
             guid: `tieba-topic-${item.topic_id}`,
         }));

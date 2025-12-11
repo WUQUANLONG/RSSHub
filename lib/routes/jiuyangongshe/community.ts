@@ -130,7 +130,7 @@ async function handler(ctx: Context): Promise<Data> {
 
     const items = response.data.result.map((item) => ({
         title: item.title,
-        description: render({ cover: item.cover, content: item.content }),
+        description: item,
         link: `${link}/a/${item.article_id}`,
         pubDate: timezone(parseDate(item.create_time, 'YYYY-MM-DD HH:mm:ss'), 8),
         author: item.user.nickname,

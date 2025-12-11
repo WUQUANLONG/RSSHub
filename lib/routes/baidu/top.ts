@@ -42,9 +42,7 @@ async function handler(ctx) {
 
     const items = data.cards[0].content.map((item) => ({
         title: item.word,
-        description: art(path.join(__dirname, 'templates/top.art'), {
-            item,
-        }),
+        description: item,
         link: item.rawUrl,
     }));
 
