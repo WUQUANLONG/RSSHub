@@ -3,7 +3,8 @@ import { Route } from '@/types';
 import got from '@/utils/got';
 import { load } from 'cheerio';
 import iconv from 'iconv-lite';
-import { parseDate } from '@/utils/parse-date';
+import {formatDate, parseDate} from '@/utils/parse-date';
+
 
 export const handler = async (ctx) => {
     const { tag } = ctx.req.param();
@@ -34,13 +35,14 @@ export const handler = async (ctx) => {
             const description = item.digest;
             const guid = `10jqka-${item.seq}`;
             const image = item.picUrl;
-
             item.ctime = parseDate(item.ctime, 'X');
             item.rtime = parseDate(item.rtime, 'X');
+            item.ctime = formatDate(new Date(item.ctime), 'YYYY-MM-DD HH:mm:ss');
+            item.rtime = formatDate(new Date(item.rtime), 'YYYY-MM-DD HH:mm:ss');
             return {
                 title,
                 description: item,
-                pubDate: parseDate(item.ctime, 'X'),
+                pubDate: item.ctime,
                 link: item.url,
                 category: [...new Set([item.color === '2' ? '重要' : undefined, ...item.tags.map((c) => c.name), ...item.tagInfo.map((c) => c.name)])].filter(Boolean),
                 author: item.source,
@@ -48,7 +50,7 @@ export const handler = async (ctx) => {
                 id: guid,
                 image,
                 banner: item.picUrl,
-                updated: parseDate(item.rtime, 'X'),
+                updated: item.rtime,
                 language,
             };
         }) ?? [];
