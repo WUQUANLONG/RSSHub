@@ -35,7 +35,30 @@ export const route: Route = {
     maintainers: ['LarchLiu', 'Rongronggg9'],
     handler,
 };
+function removeUserFromTweets(tweets) {
+    if (!tweets || !Array.isArray(tweets)) {
+        return [];
+    }
 
+    return tweets.map(tweet => {
+        // 使用 JSON 方法进行深拷贝
+        const tweetCopy = JSON.parse(JSON.stringify(tweet));
+
+        // 移除 user 字段
+        delete tweetCopy.user;
+
+        // 可选：保留一些有用的用户基本信息
+        // 如果需要用户ID，可以单独保留
+        if (tweet.user_id_str) {
+            tweetCopy.author_id = tweet.user_id_str;
+        }
+        if (tweet.user?.screen_name) {
+            tweetCopy.author_username = tweet.user.screen_name;
+        }
+
+        return tweetCopy;
+    });
+}
 async function handler(ctx) {
     const id = ctx.req.param('id');
     const status = ctx.req.param('status');
