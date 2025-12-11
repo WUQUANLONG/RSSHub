@@ -61,25 +61,13 @@ async function handler(ctx) {
     data = await  api.getUserTweet(id, params);
     // data 数据中的日期，需要统一处理一下
     let processData = processTwitterData(data);
-    const items = processData.map((item, index) => {
-            const pubDate = parseNewsTime(item.newsTime);
-            const description = item;
 
-            return {
-                guid: item.conversation_id_str,
-                link: normalizeUrl(item.url, baseUrl),
-                pubDate: item.created_at_formatted,
-                description: item,
-
-            };
-        })
-        .filter(item => item.title && item.link);
     return {
         title: `Twitter @${userInfo.name}`,
         link: `https://x.com/${userInfo.screen_name}/status/${status}`,
         image: profileImageUrl.replace(/_normal.jpg$/, '.jpg'),
         description: userInfo.description,
-        item: items,
+        item: processData,
     };
 }
 
@@ -145,7 +133,7 @@ function processTwitterData(data: any[]) {
         }
 
         return {
-            title: item.full_text || ``,
+            title: tweet.full_text || ``,
             link: '',
             pubDate: formattedDate,
             description: tweet,
