@@ -61,13 +61,25 @@ async function handler(ctx) {
     data = await  api.getUserTweet(id, params);
     // data 数据中的日期，需要统一处理一下
     let processData = processTwitterData(data);
+    const items = processData.map((item, index) => {
+            const pubDate = parseNewsTime(item.newsTime);
+            const description = item;
 
+            return {
+                guid: item.conversation_id_str,
+                link: normalizeUrl(item.url, baseUrl),
+                pubDate: item.created_at_formatted,
+                description: item,
+
+            };
+        })
+        .filter(item => item.title && item.link);
     return {
         title: `Twitter @${userInfo.name}`,
         link: `https://x.com/${userInfo.screen_name}/status/${status}`,
         image: profileImageUrl.replace(/_normal.jpg$/, '.jpg'),
         description: userInfo.description,
-        item: processData,
+        item: items,
     };
 }
 
@@ -126,19 +138,17 @@ function processTwitterData(data: any[]) {
             ? parseTwitterDate(tweet.user.created_at)
             : '';
 
-        return {
-            ...tweet,
-            // 添加格式化后的日期字段
-            created_at_formatted: formattedDate,
-            // 如果需要保留原始日期，也可以添加
-            created_at_original: tweet.created_at,
+        tweet.created_at = formattedDate;
+        if (tweet.user.created_at) {
 
-            // 更新用户信息
-            user: tweet.user ? {
-                ...tweet.user,
-                created_at_formatted: userCreatedAt,
-                created_at_original: tweet.user.created_at,
-            } : tweet.user,
+            tweet.user.created_at = userCreatedAt;
+        }
+
+        return {
+            title: item.full_text || ``,
+            link: '',
+            pubDate: formattedDate,
+            description: tweet,
         };
     });
 }

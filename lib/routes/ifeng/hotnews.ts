@@ -42,7 +42,7 @@ async function handler(ctx) {
             .filter(item => item && item.title && item.url) // 过滤无效数据
             .map((item, index) => {
                 const pubDate = parseNewsTime(item.newsTime);
-                const description = generateDescription(item);
+                const description = item;
 
                 return {
                     title: item.title || `凤凰热点新闻 ${index + 1}`,
