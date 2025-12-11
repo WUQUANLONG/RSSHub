@@ -35,30 +35,7 @@ export const route: Route = {
     maintainers: ['LarchLiu', 'Rongronggg9'],
     handler,
 };
-function removeUserFromTweets(tweets) {
-    if (!tweets || !Array.isArray(tweets)) {
-        return [];
-    }
 
-    return tweets.map(tweet => {
-        // 使用 JSON 方法进行深拷贝
-        const tweetCopy = JSON.parse(JSON.stringify(tweet));
-
-        // 移除 user 字段
-        delete tweetCopy.user;
-
-        // 可选：保留一些有用的用户基本信息
-        // 如果需要用户ID，可以单独保留
-        if (tweet.user_id_str) {
-            tweetCopy.author_id = tweet.user_id_str;
-        }
-        if (tweet.user?.screen_name) {
-            tweetCopy.author_username = tweet.user.screen_name;
-        }
-
-        return tweetCopy;
-    });
-}
 async function handler(ctx) {
     const id = ctx.req.param('id');
     const status = ctx.req.param('status');
@@ -79,39 +56,89 @@ async function handler(ctx) {
 
     const profileImageUrl = userInfo.profile_image_url || userInfo.profile_image_url_https;
     //const item = original && config.isPackage ? data : utils.ProcessFeed(ctx, { data });
+
     let data;
-    try {
-        data = await  api.getUserTweetsAndReplies(id, params);
-        if (!include_rts) {
-            data = utils.excludeRetweet(data);
-        }
-    } catch (error) {
-        logger.error(error);
-    }
-    console.log('返回数据量:', data?.length || 0);
-
-    // 移除 user 字段
-    const dataWithoutUser = removeUserFromTweets(data);
-
-    // 处理 RSS 项目
-    const feedItems = data ? utils.ProcessFeed(ctx, { data }) : [];
-
-    // 添加处理后的数据到描述中
-    if (feedItems.length > 0 && dataWithoutUser) {
-        feedItems.forEach((item, index) => {
-            let tweetData = dataWithoutUser[index];
-
-            if (tweetData) {
-                item.description = tweetData;
-            }
-        });
-    }
+    data = await  api.getUserTweet(id, params);
+    // data 数据中的日期，需要统一处理一下
+    let processData = processTwitterData(data);
 
     return {
         title: `Twitter @${userInfo.name}`,
         link: `https://x.com/${userInfo.screen_name}/status/${status}`,
         image: profileImageUrl.replace(/_normal.jpg$/, '.jpg'),
         description: userInfo.description,
-        item: feedItems,
+        item: processData,
     };
+}
+
+/**
+ * 解析 Twitter/X 格式的日期字符串
+ * @param twitterDate Twitter/X 格式的日期字符串，如: "Thu Dec 11 11:55:00 +0000 2025"
+ * @param format 输出格式，默认: "YYYY-MM-DD HH:mm:ss"
+ * @returns 格式化后的日期字符串
+ */
+function parseTwitterDate(
+    twitterDate: string,
+    format: string = 'YYYY-MM-DD HH:mm:ss'
+): string {
+    if (!twitterDate) return '';
+
+    try {
+        // Twitter/X 日期格式: "Thu Dec 11 11:55:00 +0000 2025"
+        const date = new Date(twitterDate);
+
+        // 检查日期是否有效
+        if (isNaN(date.getTime())) {
+            console.warn('Invalid Twitter date:', twitterDate);
+            return '';
+        }
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+
+        return format
+            .replace('YYYY', year.toString())
+            .replace('MM', month)
+            .replace('DD', day)
+            .replace('HH', hours)
+            .replace('mm', minutes)
+            .replace('ss', seconds);
+    } catch (error) {
+        console.error('Error parsing Twitter date:', twitterDate, error);
+        return '';
+    }
+}
+
+/**
+ * 处理整个数据列表
+ */
+function processTwitterData(data: any[]) {
+    return data.map((tweet) => {
+        // 处理推文创建时间
+        const formattedDate = parseTwitterDate(tweet.created_at);
+
+        // 如果需要，也可以处理用户创建时间
+        const userCreatedAt = tweet.user?.created_at
+            ? parseTwitterDate(tweet.user.created_at)
+            : '';
+
+        return {
+            ...tweet,
+            // 添加格式化后的日期字段
+            created_at_formatted: formattedDate,
+            // 如果需要保留原始日期，也可以添加
+            created_at_original: tweet.created_at,
+
+            // 更新用户信息
+            user: tweet.user ? {
+                ...tweet.user,
+                created_at_formatted: userCreatedAt,
+                created_at_original: tweet.user.created_at,
+            } : tweet.user,
+        };
+    });
 }
