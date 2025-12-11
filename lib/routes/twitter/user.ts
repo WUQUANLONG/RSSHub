@@ -119,7 +119,7 @@ async function handler(ctx) {
             }
         });
     }
-    console.log('ssss', feedItems);
+
     return {
         title: `Twitter @${userInfo?.name}`,
         link: `https://x.com/${userInfo?.screen_name}`,

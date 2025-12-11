@@ -54,7 +54,8 @@ async function handler(ctx) {
     const userInfo = await api.getUser(id);
     const data = await api.getUserTweet(id, params);
     const profileImageUrl = userInfo.profile_image_url || userInfo.profile_image_url_https;
-    const item = original && config.isPackage ? data : utils.ProcessFeed(ctx, { data });
+    //const item = original && config.isPackage ? data : utils.ProcessFeed(ctx, { data });
+    const item = data;
 
     return {
         title: `Twitter @${userInfo.name}`,
