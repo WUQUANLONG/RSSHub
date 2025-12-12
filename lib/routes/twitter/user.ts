@@ -107,7 +107,7 @@ async function handler(ctx) {
     const dataWithoutUser = removeUserFromTweets(data);
 
     // 处理 RSS 项目
-    const feedItems = data ? utils.ProcessFeed(ctx, { data }) : [];
+    const feedItems = data ?  processTwitterData(data) : [];
 
     // 添加处理后的数据到描述中
     if (feedItems.length > 0 && dataWithoutUser) {
@@ -128,4 +128,68 @@ async function handler(ctx) {
         item: feedItems,
         allowEmpty: true,
     };
+}
+
+function parseTwitterDate(
+    twitterDate: string,
+    format: string = 'YYYY-MM-DD HH:mm:ss'
+): string {
+    if (!twitterDate) return '';
+
+    try {
+        // Twitter/X 日期格式: "Thu Dec 11 11:55:00 +0000 2025"
+        const date = new Date(twitterDate);
+
+        // 检查日期是否有效
+        if (isNaN(date.getTime())) {
+            console.warn('Invalid Twitter date:', twitterDate);
+            return '';
+        }
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+
+        return format
+            .replace('YYYY', year.toString())
+            .replace('MM', month)
+            .replace('DD', day)
+            .replace('HH', hours)
+            .replace('mm', minutes)
+            .replace('ss', seconds);
+    } catch (error) {
+        console.error('Error parsing Twitter date:', twitterDate, error);
+        return '';
+    }
+}
+
+/**
+ * 处理整个数据列表
+ */
+function processTwitterData(data: any[]) {
+    return data.map((tweet) => {
+        // 处理推文创建时间
+        const formattedDate = parseTwitterDate(tweet.created_at);
+
+        // 如果需要，也可以处理用户创建时间
+        const userCreatedAt = tweet.user?.created_at
+            ? parseTwitterDate(tweet.user.created_at)
+            : '';
+
+        tweet.created_at = formattedDate;
+        if (tweet.user.created_at) {
+
+            tweet.user.created_at = userCreatedAt;
+        }
+
+        return {
+            title: tweet.full_text || ``,
+            link: '',
+            pubDate: formattedDate,
+            description: tweet,
+        };
+    });
 }
