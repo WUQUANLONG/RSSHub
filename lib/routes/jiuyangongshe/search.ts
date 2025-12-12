@@ -4,7 +4,9 @@ import ofetch from '@/utils/ofetch';
 import { parseDate } from '@/utils/parse-date';
 import timezone from '@/utils/timezone';
 import md5 from '@/utils/md5';
-
+import cache from "@/utils/cache";
+import got from "@/utils/got";
+import fs from 'fs/promises';
 export const route: Route = {
     path: '/search',
     categories: ['finance'],
@@ -50,10 +52,14 @@ async function handler(ctx: Context): Promise<Data> {
     const response = await ofetch('https://app.jiuyangongshe.com/jystock-app/api/v2/article/search', {
         method: 'POST',
         headers: {
-            'platform': '3',
-            timestamp,
-            token: md5(`Uu0KfOB8iUP69d3c:${timestamp}`),
+            Accept: 'application/json, text/plain, */*',
             'Content-Type': 'application/json',
+            Origin: 'https://www.jiuyangongshe.com',
+            Referer: 'https://www.jiuyangongshe.com/',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+            platform: '3',
+            timestamp: timestamp,
+            token: md5(`Uu0KfOB8iUP69d3c:${timestamp}`)
         },
         body: JSON.stringify({
             back_garden: 0,
@@ -82,6 +88,7 @@ async function handler(ctx: Context): Promise<Data> {
         guid: item.article_id ? item.article_id : undefined,
     })).filter(item => item.title && item.link); // 过滤无效条目
 
+
     // 生成动态标题
     const title = keyword
         ? `"${keyword}"的搜索结果 - 韭研公社`
@@ -98,4 +105,25 @@ async function handler(ctx: Context): Promise<Data> {
             nextPage: response.data.nextPage,
         }),
     };
+}
+
+async function getArticleContent(url) {
+
+    // 查看一个文章的数据
+    const timestamp2 = Date.now().toString();
+    const detailResponse = await got({
+        method: 'get',
+        url: url,
+        // 添加一些常见的请求头
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Referer': 'https://www.jiuyangongshe.com/',
+            platform: '3',
+            timestamp: timestamp2,
+            token: md5(`Uu0KfOB8iUP69d3c:${timestamp2}`)
+        }
+    });
+    return ;
 }
