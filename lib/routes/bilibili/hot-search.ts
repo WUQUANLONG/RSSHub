@@ -115,7 +115,7 @@ async function handler(ctx) {
                 //description: JSON.stringify(item, null, 2),
                 description: item,
                 link,
-                guid: `bilibili-hotsearch-${item.keyword}-${item.heat_score}`,
+                guid: `bilibili-hotsearch-${item.keyword}`,
                 // 这个热榜没有上榜时间
                 pubDate: formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss'),
             };

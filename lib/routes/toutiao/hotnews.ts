@@ -5,6 +5,8 @@ import ofetch from '@/utils/ofetch';
 import { load } from 'cheerio';
 import fs from 'fs';
 import path from 'path';
+import { parseAlaData, getAllAlaDataScripts} from "./parse_html";
+import got from "@/utils/got";
 
 const __dirname = getCurrentPath(import.meta.url);
 
@@ -106,17 +108,19 @@ async function handler(ctx) {
                 const link = item.Url || `${baseUrl}/trending/${item.ClusterIdStr || item.ClusterId}/`;
 
                 // 获取文章内容
+                //const articleContent = await getArticleContent(item.Url, item.Title);
+                //item.content = articleContent.content;
 
-                //item.articleContent = articleContent;
                 items.push({
-                    title: `${i + 1}. ${title}`,
+                    id: item.ClusterId,
+                    title: title,
                     description: item, // 使用获取到的内容
                     pubDate: parseDate(new Date()),
-                    guid: `toutiao-hot-${item.ClusterIdStr || i}-${Date.now()}`,
+                    guid: `toutiao-hot-${item.ClusterIdStr || title}`,
                     category: item.InterestCategory,
                 });
             }
-            // const articleContent = await getArticleContent(items[0].description.Url, items[0].description.Title);
+
             // 如果有置顶数据，也添加进去
             if (response.fixed_top_data && Array.isArray(response.fixed_top_data)) {
                 for (let i = 0; i < response.fixed_top_data.length; i++) {
@@ -133,7 +137,7 @@ async function handler(ctx) {
                         title: title,
                         description: item, // 使用获取到的内容
                         pubDate: parseDate(new Date()),
-                        guid: `toutiao-fixed-${item.ClusterIdStr || i}-${Date.now()}`,
+                        guid: `toutiao-fixed-${item.ClusterIdStr || title}-${Date.now()}`,
                     });
                 }
             }
@@ -177,18 +181,36 @@ async function handler(ctx) {
     }
 }
 
-/**
- * 获取文章详细内容（纯文本）
- * @param url 文章链接
- * @param title 文章标题（用于搜索备用）
- * @returns 文章内容对象（纯文本）
- */
+// 在函数外部定义缓存
+const articleCache = new Map<string, { content: any[], timestamp: number }>();
+const CACHE_EXPIRY = 30 * 60 * 1000; // 30分钟缓存
+
 async function getArticleContent(url: string, title?: string): Promise<ArticleContent> {
     const baseUrl = 'https://www.toutiao.com';
     const mobileBaseUrl = 'https://m.toutiao.com';
 
     try {
         console.log(`获取文章内容: ${url}`);
+
+        // 检查缓存
+        const cacheKey = title || url;
+        const now = Date.now();
+
+        if (cacheKey && articleCache.has(cacheKey)) {
+            const cached = articleCache.get(cacheKey)!;
+            if (now - cached.timestamp < CACHE_EXPIRY) {
+                console.log(`使用缓存的内容: ${cacheKey}`);
+                return {
+                    url: url,
+                    title: title || '未知标题',
+                    content: cached.content,
+                    images: []
+                };
+            } else {
+                console.log(`缓存已过期: ${cacheKey}`);
+                articleCache.delete(cacheKey);
+            }
+        }
 
         // 处理 article 类型的链接
         if (url.includes('/article/')) {
@@ -209,8 +231,8 @@ async function getArticleContent(url: string, title?: string): Promise<ArticleCo
                         'Referer': baseUrl,
                     },
                 });
-                const filename = `article_${articleId}`;
-                saveHtmlForDebug(html, filename, 'article');
+                // const filename = `article_${articleId}`;
+                // saveHtmlForDebug(html, filename, 'article');
                 const $ = load(html);
 
                 // 查找 article 标签内容
@@ -247,12 +269,22 @@ async function getArticleContent(url: string, title?: string): Promise<ArticleCo
                         }
                     });
 
-                    return {
+                    const result = {
                         url: mobileUrl,
                         title: articleTitle,
                         content: plainText,
                         images
                     };
+
+                    // 缓存结果
+                    if (cacheKey) {
+                        articleCache.set(cacheKey, {
+                            content: [plainText],
+                            timestamp: now
+                        });
+                    }
+
+                    return result;
                 }
             }
         }
@@ -261,122 +293,80 @@ async function getArticleContent(url: string, title?: string): Promise<ArticleCo
         console.log(`使用搜索页面获取内容: ${title}`);
         const searchUrl = `https://so.toutiao.com/search?keyword=${encodeURIComponent(title || '热点')}`;
 
-        const html = await ofetch(searchUrl, {
-            method: 'GET',
+        const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'Accept-Language': 'zh-CN,zh;q=0.9',
-                'Referer': baseUrl,
-            },
+                //'Host': 'https://so.toutiao.com',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                //'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                //'Accept-Language': 'zh-CN,zh;q=0.9',
+                //'Accept-Encoding': 'gzip, deflate, br',
+            }
         });
-        console.log('ssssss', html);
-        const filename = `seach_${title}`;
-        saveHtmlForDebug(html, filename, 'seach');
-        const $ = load(html);
+        const html = response.text();
+        // const filename = `search_${title}`;
+        // saveHtmlForDebug(html, filename, 'search');
+        const htmlScripts = getAllAlaDataScripts(html);
 
-        // 查找包含热点数据的脚本标签
-        const scriptTags = $('script[data-for="ala-data"]');
-
-        for (const script of scriptTags) {
-            const scriptContent = $(script).html();
-            if (scriptContent && scriptContent.includes('window.T && T.flow')) {
-                try {
-                    // 提取 JSON 数据
-                    const jsonMatch = scriptContent.match(/data:\s*({[^}]+})/);
-
-                    console.log('sss1', jsonMatch);
-                    if (jsonMatch && jsonMatch[1]) {
-                        const jsonStr = jsonMatch[1];
-                        const data = JSON.parse(jsonStr);
-                        console.log('sss2', data);
-                        // 提取内容
-                        let plainText = '';
-                        if (data.display) {
-                            plainText = data.display.top_content.abstract || data.display.top_content.rich_content
-                        }
-
-                        // 清理文本
-                        plainText = plainText
-                            .replace(/<[^>]*>/g, '')
-                            .replace(/\s+/g, ' ')
-                            .trim();
-
-                        return {
-                            url: url,
-                            title: data.title || title || '未知标题',
-                            content: plainText,
-                            images: data.images ? data.images.map((img: any) => img.url).filter(Boolean) : []
-                        };
-                    }
-                } catch (e) {
-                    console.log('解析脚本数据失败:', e.message);
-                }
+        let content = [];
+        for (const scriptContent of htmlScripts) {
+            const scriptsJson = parseAlaData(scriptContent);
+            if (scriptsJson && scriptsJson.display && scriptsJson.display.top_content) {
+                content.push(scriptsJson.display.top_content);
             }
         }
 
-        // 如果找不到脚本数据，尝试从页面中提取摘要
-        const summary = $('.summary, .abstract, .content').first().text().trim();
-        if (summary) {
-            const cleanSummary = summary
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            return {
-                url: searchUrl,
-                title: title || $('title').text().trim().split('_')[0] || '未知标题',
-                content: cleanSummary,
-                images: []
-            };
-        }
-
-        // 返回默认内容
-        return {
+        const result = {
             url: searchUrl,
             title: title || '未知标题',
-            content: '',
+            content: content,
             images: []
         };
+
+        // 缓存搜索结果
+        if (cacheKey) {
+            articleCache.set(cacheKey, {
+                content: content,
+                timestamp: now
+            });
+        }
+
+        return result;
 
     } catch (error) {
         console.error(`获取文章内容失败 (${url}):`, error.message);
         return {
             url: url,
             title: title || '未知标题',
-            content: '',
+            content: [],
             images: []
         };
     }
 }
 
-function saveHtmlForDebug(html: string, filename: string, type: 'article' | 'search') {
+export function saveHtmlForDebug(html: string, filename: string, type: string = 'debug'): void {
     try {
-        const debugDir = path.join(__dirname, '../../debug');
-        const timestamp = new Date().getTime();
-
-        // 确保目录存在
+        // 创建调试目录
+        const debugDir = path.join(__dirname, '../debug');
         if (!fs.existsSync(debugDir)) {
-            fs.mkdirSync(debugDir, {recursive: true});
+            fs.mkdirSync(debugDir, { recursive: true });
         }
 
-        // 保存原始 HTML
-        const htmlFilename = `${timestamp}_${type}_${filename}.html`;
-        const htmlPath = path.join(debugDir, htmlFilename);
-        fs.writeFileSync(htmlPath, html, 'utf-8');
-        console.log(`已保存 HTML 到: ${htmlPath}`);
+        // 创建类型子目录
+        const typeDir = path.join(debugDir, type);
+        if (!fs.existsSync(typeDir)) {
+            fs.mkdirSync(typeDir, { recursive: true });
+        }
 
-        // 保存解析后的信息
-        const info = {
-            type,
-            filename,
-            timestamp,
-            url: filename,
-            savedAt: new Date().toISOString(),
-            fileSize: html.length
-        };
+        // 生成完整文件名
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fullFilename = `${filename}_${timestamp}.html`;
+        const filePath = path.join(typeDir, fullFilename);
 
-        const infoPath = path.join(debugDir, `${timestamp}_${type}_${filename}_info.json`);
-        fs.writeFileSync(infoPath, JSON.stringify(info, null, 2), 'utf-8');
+        // 保存 HTML 文件
+        fs.writeFileSync(filePath, html, 'utf-8');
+
+        console.log(`✅ HTML 已保存到: ${filePath}`);
+        console.log(`📊 文件大小: ${(html.length / 1024).toFixed(2)} KB`);
 
     } catch (error) {
         console.error('保存调试文件失败:', error.message);

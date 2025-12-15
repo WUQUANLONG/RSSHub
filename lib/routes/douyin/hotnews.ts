@@ -114,7 +114,7 @@ async function handler() {
                 link: `${baseUrl}/search/${encodeURIComponent(item.word)}?type=general`,
                 description: item,
                 pubDate: parseDate(new Date()),
-                guid: `douyin-hot-${item.sentence_id || index}-${data.timestamp}`,
+                guid: `douyin-hot-${item.sentence_id || item.word}`,
             };
         });
 
@@ -126,11 +126,11 @@ async function handler() {
                 const description = JSON.stringify(item, null, 2);
 
                 items.push({
-                    title: `🔝 ${item.word}`,
+                    title: `${item.word}`,
                     link: `${baseUrl}/search/${encodeURIComponent(item.word)}?type=general`,
                     description: description,
                     pubDate: parseDate(new Date()),
-                    guid: `douyin-top-${item.sentence_id || index}-${data.timestamp}`,
+                    guid: `douyin-top-${item.sentence_id || item.word}`,
                 });
             });
         }

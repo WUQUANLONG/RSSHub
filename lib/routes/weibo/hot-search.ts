@@ -97,13 +97,13 @@ async function handler() {
 
             // 为每个热搜创建独立的条目
             const items = realtimeList.map((item, index) => ({
-                title: `微博热搜 ${index + 1}`,
+                title: item.word,
                 description: item,
                 link: item.word_scheme
                     ? `https://s.weibo.com/${item.word_scheme}`
                     : `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word)}`,
                 pubDate: parseDate(timestamp),
-                guid: `weibo-hot-${item.word}-${timestamp}-${index}`,
+                guid: `weibo-hot-${item.word}`,
             }));
 
             return {
