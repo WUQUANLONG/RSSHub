@@ -62,13 +62,17 @@ async function handler(ctx) {
         .map((item) => {
             if (item.newsList && Array.isArray(item.newsList) && item.newsList.length > 0) {
                 let item_content = item.newsList[0];
+                delete (item_content as any).timeLine; // 有时间线，数据量太大
+                delete (item_content as any).newsModule;  // 一个新闻的格式
+                delete (item_content as any).card; // 作者信息，有些重复
+                delete (item_content as any).shareDoc // 分享信息
+                delete (item_content as any).thumbnails
                 return {
                     title: item_content.title || item_content.longtitle || '无标题',
                     url: item_content.url,
                     description: item_content,
-                    pubDate: parseDate(item.time || item.timestamp * 1000),
-                    author: item.source || item.chlname || '腾讯新闻',
-                    category: [item.chlname, item.tag].filter(Boolean),
+                    pubDate: parseDate(item_content.time || item_content.timestamp * 1000),
+                    author: item_content.source || item_content.chlname || '腾讯新闻',
                     guid: item_content.id,
                 };
             }
