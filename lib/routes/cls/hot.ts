@@ -3,7 +3,7 @@ import { Route } from '@/types';
 import cache from '@/utils/cache';
 import got from '@/utils/got';
 import { load } from 'cheerio';
-import { parseDate } from '@/utils/parse-date';
+import {formatDate, parseDate} from '@/utils/parse-date';
 import { art } from '@/utils/render';
 import path from 'node:path';
 
@@ -64,6 +64,9 @@ async function handler(ctx) {
                 let articleDetail = nextData.props.initialState.detail.articleDetail;
                 if (articleDetail.content) {
                     articleDetail.content = decodeAndExtractText(articleDetail.content);
+                }
+                if (articleDetail.ctime) {
+                    articleDetail.ctime = formatDate(parseDate(articleDetail.ctime * 1000));
                 }
 
                 item.description = articleDetail;

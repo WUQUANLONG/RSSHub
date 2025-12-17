@@ -8,6 +8,7 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
+import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 export const handler = async (ctx) => {
     const { id = '1103' } = ctx.req.param();
@@ -24,9 +25,7 @@ export const handler = async (ctx) => {
 
     let items = response.data.slice(0, limit).map((item) => {
         const title = item.article_title;
-        const description = art(path.join(__dirname, 'templates/description.art'), {
-            intro: item.article_brief,
-        });
+        const description = decodeAndExtractText(item.article_brief);
         const guid = `cls-${item.article_id}`;
         const image = item.article_img;
 
@@ -39,10 +38,6 @@ export const handler = async (ctx) => {
             author: item.article_author,
             guid,
             id: guid,
-            content: {
-                html: description,
-                text: item.article_brief,
-            },
             image,
             banner: image,
         };
@@ -62,14 +57,7 @@ export const handler = async (ctx) => {
                 }
 
                 const title = data.title;
-                const description = art(path.join(__dirname, 'templates/description.art'), {
-                    images: data.images.map((i) => ({
-                        src: i,
-                        alt: title,
-                    })),
-                    intro: data.brief,
-                    description: data.content,
-                });
+                const description = decodeAndExtractText(data.content);
                 const guid = `cls-${data.id}`;
                 const image = data.images?.[0] ?? undefined;
 
@@ -80,10 +68,6 @@ export const handler = async (ctx) => {
                 item.author = data.author?.name ?? item.author;
                 item.guid = guid;
                 item.id = guid;
-                item.content = {
-                    html: description,
-                    text: data.content,
-                };
                 item.image = image;
                 item.banner = image;
                 item.enclosure_url = data.audioUrl;

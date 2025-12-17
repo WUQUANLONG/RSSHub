@@ -1,7 +1,7 @@
 import { Route } from '@/types';
 
 import got from '@/utils/got';
-import { parseDate } from '@/utils/parse-date';
+import {formatDate, parseDate} from '@/utils/parse-date';
 import { art } from '@/utils/render';
 import path from 'node:path';
 
@@ -66,15 +66,25 @@ async function handler(ctx) {
         }),
     });
 
-    const items = response.data.data.roll_data.slice(0, limit).map((item) => ({
-        title: item.title || item.content,
-        link: item.shareurl,
-        description: art(path.join(__dirname, 'templates/telegraph.art'), {
-            item,
-        }),
-        pubDate: parseDate(item.ctime * 1000),
-        category: item.subjects?.map((s) => s.subject_name),
-    }));
+    const items = response.data.data.roll_data.slice(0, limit).map((item) => {
+        // 创建格式化后的时间变量，不修改原始对象
+        const formattedCtime = formatDate(parseDate(item.ctime * 1000));
+        const formattedModifiedTime = item.modified_time
+            ? formatDate(parseDate(item.modified_time * 1000))
+            : '';
+        let tmp = item
+
+        tmp.ctime = formattedCtime;
+        tmp.modified_time = formattedModifiedTime;
+        return {
+            title: item.title || item.content,
+            link: item.shareurl,
+            description: tmp, // 注意：这里传入了原始对象，可能不是好主意
+            pubDate: parseDate(item.ctime * 1000), // RSS 需要 Date 对象，不是格式化字符串
+            category: item.subjects?.map((s) => s.subject_name) || [],
+
+        };
+    });
 
     return {
         title: `财联社 - 电报${category === '' ? '' : ` - ${categories[category]}`}`,

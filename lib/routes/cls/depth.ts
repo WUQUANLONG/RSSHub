@@ -89,9 +89,7 @@ async function handler(ctx) {
                 const articleDetail = nextData.props.initialState.detail.articleDetail;
 
                 item.author = articleDetail.author?.name ?? item.author ?? '';
-                item.description = art(path.join(__dirname, 'templates/depth.art'), {
-                    articleDetail,
-                });
+                item.description = articleDetail
 
                 return item;
             })
