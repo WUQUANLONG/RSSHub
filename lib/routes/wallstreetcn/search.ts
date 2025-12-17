@@ -4,24 +4,17 @@ import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 import {decodeAndExtractText} from "@/utils/parse-html-content";
 
-const titles = {
-    global: '最新',
-    shares: '股市',
-    bonds: '债市',
-    commodities: '商品',
-    forex: '外汇',
-    enterprise: '公司',
-    'asset-manage': '资管',
-    tmt: '科技',
-    estate: '地产',
-    car: '汽车',
-    medicine: '医药',
-};
-
 export const route: Route = {
-    path: '/news/:category?',
+    path: '/search',
     categories: ['finance'],
-    example: '/wallstreetcn/news',
+    example: '/wallstreetcn/search',
+    parameters: {
+        k: {
+            description: '关键字',
+            type: 'string',
+            required: true,
+        }
+    },
     radar: [
         {
             source: ['wallstreetcn.com/news/:category', 'wallstreetcn.com/'],
@@ -46,13 +39,19 @@ export const route: Route = {
 };
 
 async function handler(ctx) {
-    const category = ctx.req.param('category') ?? 'global';
+    const k = ctx.req.query('k');
+    if (!k || k.trim().length === 0) {
+        throw new Error('搜索关键词不能为空');
+    }
+    const keyword = k.trim();
+
 
     const rootUrl = 'https://wallstreetcn.com';
     const apiRootUrl = 'https://api-one.wallstcn.com';
-    const currentUrl = `${rootUrl}/news/${category}`;
-    const apiUrl = `${apiRootUrl}/apiv1/content/information-flow?channel=${category}-channel&accept=article&limit=${ctx.req.query('limit') ?? 25}`;
+    const currentUrl = `${rootUrl}/search?q=${keyword}&type=info`;
+    const apiUrl = `${apiRootUrl}/apiv1/search/article?query==${keyword}&cursor=&limit=20&vip_type=`;
 
+    // 查询接口 https://api-one-wscn.awtmt.com/apiv1/search/article?query=keyword&cursor=&limit=20&vip_type=
     const response = await got({
         method: 'get',
         url: apiUrl,
@@ -64,10 +63,10 @@ async function handler(ctx) {
                 item.resource_type !== 'theme';
         })
         .map((item) => ({
-            type: item.resource_type,
-            guid: item.resource.id,
-            link: item.resource.uri,
-            pubDate: parseDate(item.resource.display_time * 1000),
+            type: 'article',
+            guid: item.id,
+            link: item.uri,
+            pubDate: parseDate(item.display_time * 1000),
         }));
 
     items = await Promise.all(
@@ -109,7 +108,7 @@ async function handler(ctx) {
     items = items.filter((item) => item !== null);
 
     return {
-        title: `华尔街见闻 - 资讯 - ${titles[category]}`,
+        title: `华尔街见闻 - 搜索 - ${keyword}`,
         link: currentUrl,
         item: items,
         itunes_author: '华尔街见闻',

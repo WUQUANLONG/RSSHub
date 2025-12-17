@@ -63,11 +63,7 @@ async function handler(ctx) {
             title: item.title || item.content_text,
             pubDate: parseDate(item.display_time * 1000),
             author: item.author?.display_name ?? '',
-            description: art(path.join(__dirname, 'templates/description.art'), {
-                description: item.content,
-                more: item.content_more,
-                images: item.images,
-            }),
+            description: item,
         }));
 
     return {
