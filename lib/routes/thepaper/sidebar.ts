@@ -6,7 +6,6 @@ import cache from "@/utils/cache";
 import {rootUrl} from "@/routes/cls/utils";
 import {parseDate} from "@/utils/parse-date";
 import {decodeAndExtractText} from "@/utils/parse-html-content";
-import pLimit from 'p-limit';
 
 const sections = {
     hotNews: '澎湃热榜',
