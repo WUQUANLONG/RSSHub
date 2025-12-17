@@ -6,6 +6,7 @@ import cache from "@/utils/cache";
 import {rootUrl} from "@/routes/cls/utils";
 import {parseDate} from "@/utils/parse-date";
 import {decodeAndExtractText} from "@/utils/parse-html-content";
+import pLimit from 'p-limit';
 
 const sections = {
     hotNews: '澎湃热榜',
@@ -81,15 +82,64 @@ async function handler(ctx) {
                             'Accept': 'application/json, text/plain, */*',
                         }
                     });
+
                     const content = load(detailResponse.data);
-                    const nextData = JSON.parse(content('script#__NEXT_DATA__').text());
-                    let articleDetail = nextData.props.pageProps.detailData.contentDetail;
-                    if (articleDetail.content) {
-                        articleDetail.content = decodeAndExtractText(articleDetail.content);
+                    const nextDataScript = content('script#__NEXT_DATA__');
+
+                    if (!nextDataScript.length) {
+                        console.warn('文章没有 __NEXT_DATA__ 脚本:', item.link);
+                        return {
+                            ...item,
+                            description: item.title,
+                            author: item.author || '',
+                        };
+                    }
+
+                    let nextData;
+                    try {
+                        nextData = JSON.parse(nextDataScript.text());
+                    } catch (error) {
+                        console.warn('解析 __NEXT_DATA__ 失败:', item.link, error.message);
+                        return {
+                            ...item,
+                            description: item.title,
+                            author: item.author || '',
+                        };
+                    }
+
+                    if (!nextData?.props?.pageProps?.detailData) {
+                        console.warn('文章数据结构不完整:', item.link);
+                        return {
+                            ...item,
+                            description: item.title,
+                            author: item.author || '',
+                        };
+                    }
+
+                    const contType = nextData.props.pageProps.detailData.contType;
+                    let articleDetail = {};
+
+                    if (contType === 8) {
+                        articleDetail = nextData.props.pageProps.detailData.liveDetail || {};
+                    } else {
+                        articleDetail = nextData.props.pageProps.detailData.contentDetail || {};
+                    }
+
+                    // 处理内容
+                    const rawContent = articleDetail?.content || articleDetail?.summary;
+                    if (rawContent) {
+                        try {
+                            articleDetail.content = decodeAndExtractText(rawContent);
+                        } catch (error) {
+                            console.warn('解码内容失败:', item.link, error.message);
+                            articleDetail.content = item.title;
+                        }
+                    } else {
+                        articleDetail.content = item.title;
                     }
 
                     item.description = articleDetail;
-                    item.author = articleDetail.author?.name ?? item.author ?? '';
+                    item.author = articleDetail?.author?.name ?? item.author ?? '';
 
                     return item;
                 })
