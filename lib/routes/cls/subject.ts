@@ -8,7 +8,7 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
-import {decodeAndExtractText} from "@/utils/parse-html-content";
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 
 export const handler = async (ctx) => {
     const { id = '1103' } = ctx.req.param();
@@ -25,13 +25,16 @@ export const handler = async (ctx) => {
 
     let items = response.data.slice(0, limit).map((item) => {
         const title = item.article_title;
-        const description = decodeAndExtractText(item.article_brief);
+
+        let contnet = {}
+        contnet.content = decodeAndExtractText(item.article_brief);
+        contnet.content_images = [];
         const guid = `cls-${item.article_id}`;
         const image = item.article_img;
 
         return {
             title,
-            description,
+            description: contnet,
             pubDate: parseDate(item.article_time, 'X'),
             link: new URL(`detail/${item.article_id}`, rootUrl).href,
             category: item.subjects.map((s) => s.subject_name),
@@ -57,12 +60,14 @@ export const handler = async (ctx) => {
                 }
 
                 const title = data.title;
-                const description = decodeAndExtractText(data.content);
+                let contnet = {}
+                contnet.content = decodeAndExtractText(data.content);
+                contnet.content_images = extractImageUrlsWithCheerio(data.content);
                 const guid = `cls-${data.id}`;
                 const image = data.images?.[0] ?? undefined;
 
                 item.title = title;
-                item.description = description;
+                item.description = contnet;
                 item.pubDate = parseDate(data.ctime, 'X');
                 item.category = [...new Set(data.subject?.flatMap((s) => [s.name, ...(s.subjectCategory?.flatMap((c) => [c.columnName || [], c.name || []]) ?? [])]))].filter(Boolean);
                 item.author = data.author?.name ?? item.author;

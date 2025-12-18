@@ -2,7 +2,7 @@ import { Route } from '@/types';
 import cache from '@/utils/cache';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
-import {decodeAndExtractText} from "@/utils/parse-html-content";
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 
 export const route: Route = {
     path: '/search',
@@ -88,7 +88,12 @@ async function handler(ctx) {
 
                 item.title = data.title || data.content_text;
                 item.author = data.source_name ?? data.author.display_name;
-                item.description = decodeAndExtractText(data.content + (data.content_more ?? ''));
+
+                let content = data.content + (data.content_more ?? '');
+                data.content = decodeAndExtractText(content);
+                data.content_images = extractImageUrlsWithCheerio(content);
+                item.description = data;
+
                 item.category = data.asset_tags?.map((t) => t.name) ?? [];
 
                 if (data.audio_uri) {

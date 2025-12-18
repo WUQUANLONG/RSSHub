@@ -1,3 +1,5 @@
+import * as cheerio from "cheerio";
+
 export function decodeAndExtractText(
     rawContent: string,
     options: {
@@ -117,4 +119,18 @@ export function decodeAndExtractText(
     }
 
     return processed;
+}
+
+export function extractImageUrlsWithCheerio(htmlContent) {
+    const $ = cheerio.load(htmlContent);
+    const imageUrls = [];
+
+    $('img').each((index, element) => {
+        const src = $(element).attr('src');
+        if (src) {
+            imageUrls.push(src);
+        }
+    });
+
+    return [...new Set(imageUrls)]; // 去重
 }

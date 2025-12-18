@@ -8,7 +8,6 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
-import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 export const handler = async (ctx) => {
     // 第一步，先请求 https://www.cls.cn/api/subject/category?app=CailianpressWeb&os=web&sv=8.4.6&sign=9f8797a1f4de66c2370f7a03990d2737

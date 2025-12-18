@@ -5,7 +5,7 @@ import {load} from "cheerio";
 import cache from "@/utils/cache";
 import {rootUrl} from "@/routes/cls/utils";
 import {parseDate} from "@/utils/parse-date";
-import {decodeAndExtractText} from "@/utils/parse-html-content";
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 import ofetch from "@/utils/ofetch";
 
 export const route: Route = {
@@ -141,12 +141,15 @@ async function handler(ctx) {
                         if (rawContent) {
                             try {
                                 articleDetail.content = decodeAndExtractText(rawContent);
+                                articleDetail.content_images = extractImageUrlsWithCheerio(rawContent);
                             } catch (error) {
                                 console.warn('解码内容失败:', item.link, error.message);
                                 articleDetail.content = item.title;
+                                articleDetail.content_images = [];
                             }
                         } else {
                             articleDetail.content = item.title;
+                            articleDetail.content_images = [];
                         }
 
                         item.description = articleDetail;

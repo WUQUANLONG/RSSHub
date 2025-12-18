@@ -8,7 +8,7 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
-import {decodeAndExtractText} from "@/utils/parse-html-content";
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 
 export const route: Route = {
     path: '/hot',
@@ -63,7 +63,9 @@ async function handler(ctx) {
                 const nextData = JSON.parse(content('script#__NEXT_DATA__').text());
                 let articleDetail = nextData.props.initialState.detail.articleDetail;
                 if (articleDetail.content) {
-                    articleDetail.content = decodeAndExtractText(articleDetail.content);
+                    let tmp = articleDetail.content
+                    articleDetail.content = decodeAndExtractText(tmp);
+                    articleDetail.content_images = extractImageUrlsWithCheerio(tmp);
                 }
                 if (articleDetail.ctime) {
                     articleDetail.ctime = formatDate(parseDate(articleDetail.ctime * 1000));

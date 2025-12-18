@@ -8,7 +8,6 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
-import {decodeAndExtractText} from "@/utils/parse-html-content";
 
 export const handler = async (ctx) => {
     const timestampSeconds = Date.now() / 1000 | 0;
