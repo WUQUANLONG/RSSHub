@@ -121,16 +121,68 @@ export function decodeAndExtractText(
     return processed;
 }
 
-export function extractImageUrlsWithCheerio(htmlContent) {
+export function extractImageUrlsWithCheerio(htmlContent, baseUrl = '') {
     const $ = cheerio.load(htmlContent);
     const imageUrls = [];
 
     $('img').each((index, element) => {
-        const src = $(element).attr('src');
-        if (src) {
-            imageUrls.push(src);
+        const $element = $(element);
+        let src = $element.attr('src');
+        const dataSrc = $element.attr('data-src'); // 有些图片在 data-src 中
+        const originalSrc = $element.attr('data-original'); // 原始大图
+
+        // 优先使用 data-src 或 data-original（通常是懒加载图片）
+        const imageUrl = dataSrc || originalSrc || src;
+
+        if (imageUrl) {
+            const processedUrl = normalizeImageUrl(imageUrl, baseUrl);
+            if (processedUrl) {
+                imageUrls.push(processedUrl);
+            }
         }
     });
 
     return [...new Set(imageUrls)]; // 去重
+}
+
+// 标准化图片 URL
+function normalizeImageUrl(url, baseUrl = '') {
+    if (!url || typeof url !== 'string') {
+        return null;
+    }
+
+    let normalizedUrl = url.trim();
+
+    // 1. 处理协议相对链接 (//example.com/image.jpg)
+    if (normalizedUrl.startsWith('//')) {
+        normalizedUrl = 'https:' + normalizedUrl;
+    }
+    // 2. 处理相对路径 (/image.jpg)
+    else if (normalizedUrl.startsWith('/') && baseUrl) {
+        try {
+            const base = new URL(baseUrl);
+            normalizedUrl = base.origin + normalizedUrl;
+        } catch (error) {
+            console.warn('无法解析 baseUrl:', baseUrl);
+        }
+    }
+    // 3. 处理相对路径 (image.jpg 或 ./image.jpg)
+    else if (!normalizedUrl.startsWith('http') && baseUrl) {
+        try {
+            const base = new URL(baseUrl);
+            normalizedUrl = new URL(normalizedUrl, base.origin).href;
+        } catch (error) {
+            console.warn('无法处理相对路径:', normalizedUrl);
+        }
+    }
+    // 4. 确保是有效的 URL
+    else if (!normalizedUrl.startsWith('http')) {
+        console.warn('无法处理的图片URL格式:', normalizedUrl);
+        return null;
+    }
+
+    // 可选：移除查询参数中的某些参数（如尺寸限制）
+    // normalizedUrl = normalizedUrl.replace(/[?&](width|height)=\d+/g, '');
+
+    return normalizedUrl;
 }
