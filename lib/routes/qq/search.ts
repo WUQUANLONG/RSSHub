@@ -48,7 +48,7 @@ async function handler(ctx) {
                 is_pc : 1,
                 hippy_custom_version : 25,
                 search_type : 'all',
-                search_count_limit : 20,
+                search_count_limit : 10,
                 appver: '15.5_qqnews_7.1.80',
             }
         });
