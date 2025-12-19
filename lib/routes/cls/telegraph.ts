@@ -80,7 +80,7 @@ async function handler(ctx) {
             title: item.title || item.content,
             link: item.shareurl,
             description: tmp, // 注意：这里传入了原始对象，可能不是好主意
-            pubDate: parseDate(item.ctime * 1000), // RSS 需要 Date 对象，不是格式化字符串
+            pubDate: formattedCtime, // RSS 需要 Date 对象，不是格式化字符串
             category: item.subjects?.map((s) => s.subject_name) || [],
 
         };
