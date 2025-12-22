@@ -111,6 +111,9 @@ async function handler(ctx) {
                 const articleContent = await getArticleContent(item.Url, item.Title);
                 item.content = articleContent.content;
                 item.content_images = articleContent.images;
+                if (item.HotValue) {
+                    item.view_count = Number(item.HotValue); // 用热度当做阅读
+                }
 
                 items.push({
                     id: item.ClusterId,

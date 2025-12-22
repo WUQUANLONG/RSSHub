@@ -48,6 +48,12 @@ async function handler() {
             //     userAddress: item.userAddress || '',
             //     time: item.time || '',
             // };
+            if (item.readCount) {
+                item.view_count = item.readCount;
+            }
+            if (item.commentNum) {
+                item.comment_count = item.commentNum;
+            }
 
             return {
                 title: item.title || item.longtitle || '无标题',

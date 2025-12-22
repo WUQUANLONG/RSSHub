@@ -132,6 +132,15 @@ async function handler(ctx) {
         if (thread.createdAt) {
             thread.createdAt = formatDate(new Date(thread.createdAt), 'YYYY-MM-DD HH:mm:ss');
         }
+        if (thread.replies) {
+            thread.comment_count = thread.replies;
+        }
+        if (thread.read) {
+            thread.view_count = thread.read;
+        }
+        if (thread.lights) {
+            thread.like_count = thread.lights;
+        }
 
         return {
             title: thread.title,

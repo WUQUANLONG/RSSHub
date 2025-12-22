@@ -110,6 +110,13 @@ async function handler(ctx) {
 
             const link = item.link || item.goto || searchUrl;
 
+            if (item.heat_score) {
+                item.view_count = item.heat_score;
+            }
+            if (item.show_name) {
+                item.content = item.show_name;
+            }
+
             return {
                 title: item.keyword,
                 //description: JSON.stringify(item, null, 2),
