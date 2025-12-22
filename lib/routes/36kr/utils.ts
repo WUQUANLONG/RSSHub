@@ -12,10 +12,10 @@ const ProcessItem = (item, tryGet) =>
         });
 
         const cipherTextList = detailResponse.data.match(/{"state":"(.*)","isEncrypt":true}/) ?? [];
-        let content = ''
+        let content_tmp = ''
         if (cipherTextList.length === 0) {
             const $ = load(detailResponse.body);
-            content = $('div.articleDetailContent').html();
+            content_tmp = $('div.articleDetailContent').html();
 
         } else {
             const key = CryptoJS.enc.Utf8.parse('efabccee-b754-4c');
@@ -28,11 +28,11 @@ const ProcessItem = (item, tryGet) =>
                     .toString()
             ).articleDetail.articleDetailData.data;
 
-            content = content.widgetContent;
+            content_tmp = content.widgetContent;
 
         }
-        let content_text = decodeAndExtractText(content);
-        let content_images = extractImageUrlsWithCheerio(content);
+        let content_text = decodeAndExtractText(content_tmp);
+        let content_images = extractImageUrlsWithCheerio(content_tmp);
         let articleDetailTmp = {}
         articleDetailTmp.content = content_text;
         articleDetailTmp.content_images = content_images;
