@@ -23,6 +23,10 @@ const categories = {
         title: '资讯综合榜',
         key: 'hotListData.collectList',
     },
+    newest: {
+        title: '最新文章',
+        key: 'homeData.data.homeFlow.data.itemList',
+    }
 };
 
 export const route: Route = {
@@ -47,9 +51,9 @@ export const route: Route = {
     name: '资讯热榜',
     maintainers: ['nczitzk'],
     handler,
-    description: `| 24 小时热榜 | 资讯人气榜 | 资讯综合榜 | 资讯收藏榜 |
-| ----------- | ---------- | ---------- | ---------- |
-| 24          | renqi      | zonghe     | shoucang   |`,
+    description: `| 24 小时热榜 | 资讯人气榜 | 资讯综合榜 | 资讯收藏榜 | 最新文章
+| ----------- | ---------- | ---------- | ---------- | ---------- |
+| 24          | renqi      | zonghe     | shoucang   | newest |`,
 };
 
 const getProperty = (object, key) => {
@@ -68,7 +72,7 @@ async function handler(ctx) {
         throw new InvalidParameterError('This category does not exist. Please refer to the documentation for the correct usage.');
     }
 
-    const currentUrl = category === '24' ? rootUrl : `${rootUrl}/hot-list/catalog`;
+    const currentUrl = (category === '24' || category === 'newest')? rootUrl : `${rootUrl}/hot-list/catalog`;
 
     const response = await got({
         method: 'get',
@@ -97,19 +101,26 @@ async function handler(ctx) {
     const data = getProperty(JSON.parse(response.data.match(/window.initialState=({.*})/)[1]), categories[category].key);
     // console.log('sssss', data);
     let items = data
-        .slice(0, ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit')) : 10)
+        .slice(0, ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit')) : 20)
         .filter((item) => item.itemType !== 0)
         .map((item) => {
-            item = item.templateMaterial ?? item;
+            // 获取 templateMaterial 或原 item
+            const material = item.templateMaterial ?? item;
+
+            // 检查所有必需的字段 暂时过滤视频格式
+            if (!material || !material.itemId || !material.widgetTitle || item.itemType === 60) {
+                return null;
+            }
+
             return {
-                title: item.widgetTitle.replaceAll(/<\/?em>/g, ''),
-                author: item.authorName,
-                pubDate: parseDate(item.publishTime),
-                link: `${rootUrl}/p/${item.itemId}`,
-                id: item.itemId,
-                description: item,
+                title: material.widgetTitle.replaceAll(/<\/?em>/g, ''),
+                author: material.authorName,
+                pubDate: parseDate(material.publishTime),
+                link: `${rootUrl}/p/${material.itemId}`,
+                id: material.itemId,
+                description: material,
             };
-        });
+        }).filter(Boolean);
 
     items = await Promise.all(items.map((item) => ProcessItem(item, cache.tryGet)));
 
