@@ -96,15 +96,33 @@ async function handler() {
             const realtimeList = data.data.realtime;
 
             // 为每个热搜创建独立的条目
-            const items = realtimeList.map((item, index) => ({
-                title: item.word,
-                description: item,
-                link: item.word_scheme
-                    ? `https://s.weibo.com/${item.word_scheme}`
-                    : `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word)}`,
-                pubDate: parseDate(timestamp),
-                guid: `weibo-hot-${item.word}`,
-            }));
+            // const items = realtimeList.map((item, index) => ({
+            //     title: item.word,
+            //     description: item,
+            //     link: item.word_scheme
+            //         ? `https://s.weibo.com/${item.word_scheme}`
+            //         : `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word)}`,
+            //     pubDate: parseDate(timestamp),
+            //     guid: `weibo-hot-${item.word}`,
+            // }));
+
+            const items = realtimeList.map((item) => {
+                const targetWithDetail = { ...item };
+                if (item.num !== undefined && item.num !== null) {
+                    targetWithDetail.view_count = item.num;
+                }
+
+                return {
+                    title: item.word,
+                    description: targetWithDetail,
+                    link: item.word_scheme
+                        ? `https://s.weibo.com/${item.word_scheme}`
+                        : `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word)}`,
+                    pubDate: parseDate(timestamp),
+                    guid: `weibo-hot-${item.word}`,
+                };
+            });
+
 
             return {
                 title: '微博热搜榜',

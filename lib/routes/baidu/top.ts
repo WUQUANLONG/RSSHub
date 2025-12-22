@@ -4,6 +4,7 @@ import got from '@/utils/got';
 import { load } from 'cheerio';
 import { art } from '@/utils/render';
 import path from 'node:path';
+import {parseDate} from "@/utils/parse-date";
 
 export const route: Route = {
     path: '/top/:board?',
@@ -40,11 +41,31 @@ async function handler(ctx) {
             .prevObject[0].data.match(/s-data:(.*)/)[1]
     );
 
-    const items = data.cards[0].content.map((item) => ({
-        title: item.word,
-        description: item,
-        link: item.rawUrl,
-    }));
+    // const items = data.cards[0].content.map((item) => ({
+    //     title: item.word,
+    //     description: item,
+    //     link: item.rawUrl,
+    // }));
+
+    const items = data.cards[0].content.map((item) => {
+
+        const targetWithDetail = { ...item };
+
+        // 热度 当做 查看数
+        if (targetWithDetail.desc !== undefined && targetWithDetail.desc !== null) {
+            targetWithDetail.content = targetWithDetail.desc;
+        }
+        if (targetWithDetail.hotScore !== undefined && targetWithDetail.hotScore !== null) {
+            targetWithDetail.view_count = Number(targetWithDetail.hotScore);
+        }
+        // 添加分享数（如果存在）
+
+        return {
+            title: item.word,
+            description: targetWithDetail,
+            link: item.rawUrl,
+        };
+    });
 
     return {
         title: `${data.curBoardName} - 百度热搜`,

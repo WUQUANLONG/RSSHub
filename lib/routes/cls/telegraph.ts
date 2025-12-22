@@ -73,7 +73,9 @@ async function handler(ctx) {
             ? formatDate(parseDate(item.modified_time * 1000))
             : '';
         let tmp = item
-
+        if (item.reading_num) {
+            tmp.view_count = item.reading_num;
+        }
         tmp.ctime = formattedCtime;
         tmp.modified_time = formattedModifiedTime;
         return {

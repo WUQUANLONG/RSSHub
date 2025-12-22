@@ -40,6 +40,18 @@ export const handler = async (ctx) => {
         }
 
         item.article_time = pubDate;
+        if (item.read_num) {
+            item.view_count = item.read_num;
+        }
+        if (item.comments_num) {
+            item.comment_count = item.comments_num;
+        }
+        if (item.collection_num) {
+            item.collect_count = item.collection_num;
+        }
+        if (item.share_num) {
+            item.share_count = item.share_num;
+        }
 
         return {
             title: title,

@@ -63,6 +63,7 @@ async function handler(ctx) {
         }
 
         let items = list.map((item) => ({
+            id: item.contId,
             title: item.title || item.name,
             link: `https://www.thepaper.cn/newsDetail_forward_${item.contId}`,
             pubDate: item.pubTimeLong ? new Date(item.pubTimeLong).toISOString() : new Date().toISOString(),
@@ -139,12 +140,41 @@ async function handler(ctx) {
                         articleDetail.content = item.title;
                         articleDetail.content_images = [];
                     }
+                    // 通过接口，获取 点赞数，和 帖子的评论数
+                    //https://api.thepaper.cn/contentapi/article/detail/interaction/state?contId=32224527&contentType=1
+                    const likeCountRes = await got({
+                        method: 'get',
+                        url: `https://api.thepaper.cn/contentapi/article/detail/interaction/state?contId=${item.id}&contentType=1`,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Referer': 'https://www.thepaper.cn/',
+                            'Accept': 'application/json, text/plain, */*',
+                        }
+                    });
+                    // console.log('调试aaa1', likeCountRes);
+                    if (likeCountRes?.data?.data?.praiseTimes) {
+                        articleDetail.like_count = Number(likeCountRes.data.data.praiseTimes);
+                    }
+                    const commentCountRes = await got({
+                        method: 'post',
+                        url: `https://api.thepaper.cn/comment/news/comment/count`,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Referer': 'https://www.thepaper.cn/',
+                            'Accept': 'application/json, text/plain, */*',
+                        },
+                        body: {contId: item.id}
+                    });
+                    // console.log('调试aaa2', commentCountRes);
+                    if (commentCountRes?.data?.data?.commentNum) {
+                        articleDetail.comment_count = Number(commentCountRes.data.data.commentNum);
+                    }
 
                     item.description = articleDetail;
                     item.author = articleDetail?.author?.name ?? item.author ?? '';
 
                     return item;
-                })
+                }, 5)
             )
         );
 

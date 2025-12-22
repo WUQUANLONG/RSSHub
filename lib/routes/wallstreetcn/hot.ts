@@ -62,6 +62,7 @@ async function handler(ctx) {
                 let content = data.content + (data.content_more ?? '');
                 data.content = decodeAndExtractText(content);
                 data.content_images = extractImageUrlsWithCheerio(content);
+                data.view_count = data.pageviews;
                 item.description = data;
 
                 item.category = data.asset_tags?.map((t) => t.name) ?? [];
@@ -74,7 +75,7 @@ async function handler(ctx) {
                 }
 
                 return item;
-            })
+            }, 5)
         )
     );
 

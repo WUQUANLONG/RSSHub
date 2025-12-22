@@ -24,13 +24,21 @@ export const handler = async (ctx) => {
     });
 
     let items = response.data.slice(0, limit).map((item) => {
-        const title = item.article_title;
 
+        // console.log('调试1111', item);
+        const title = item.article_title;
         let contnet = {}
         contnet.content = decodeAndExtractText(item.article_brief);
         contnet.content_images = [];
         const guid = `cls-${item.article_id}`;
         const image = item.article_img;
+
+        if (item.read_num) {
+            contnet.view_count = item.read_num;
+        }
+        if (item.share_num) {
+            contnet.share_count = item.share_num;
+        }
 
         return {
             title,
@@ -63,6 +71,10 @@ export const handler = async (ctx) => {
                 let contnet = {}
                 contnet.content = decodeAndExtractText(data.content);
                 contnet.content_images = extractImageUrlsWithCheerio(data.content);
+                if (data.readingNum) {
+                    contnet.view_count = data.readingNum;
+                }
+
                 const guid = `cls-${data.id}`;
                 const image = data.images?.[0] ?? undefined;
 
@@ -80,7 +92,7 @@ export const handler = async (ctx) => {
                 item.enclosure_title = title;
 
                 return item;
-            })
+            }, 5)
         )
     );
 

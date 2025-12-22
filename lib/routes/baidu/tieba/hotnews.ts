@@ -47,14 +47,36 @@ async function handler() {
         const hotTopics = response.data.bang_topic.topic_list;
         console.log(`获取到 ${hotTopics.length} 条热议话题`);
 
-        const items = hotTopics.map((item) => ({
-            title: `${item.idx_num || '?'}. ${item.topic_name}`,
-            link: item.topic_url?.replace(/&amp;/g, '&') ||
-                `https://tieba.baidu.com/hottopic/browse/hottopic?topic_id=${item.topic_id}`,
-            description: item,
-            pubDate: parseDate(item.create_time * 1000),
-            guid: `tieba-topic-${item.topic_id}`,
-        }));
+        // const items = hotTopics.map((item) => ({
+        //     title: `${item.idx_num || '?'}. ${item.topic_name}`,
+        //     link: item.topic_url?.replace(/&amp;/g, '&') ||
+        //         `https://tieba.baidu.com/hottopic/browse/hottopic?topic_id=${item.topic_id}`,
+        //     description: item,
+        //     pubDate: parseDate(item.create_time * 1000),
+        //     guid: `tieba-topic-${item.topic_id}`,
+        // }));
+
+        const items = hotTopics.map((item) => {
+
+            const targetWithDetail = { ...item };
+
+            // 热度 当做 查看数
+            if (targetWithDetail.abstract !== undefined && targetWithDetail.abstract !== null) {
+                targetWithDetail.content = targetWithDetail.abstract;
+            }
+            if (targetWithDetail.discuss_num !== undefined && targetWithDetail.discuss_num !== null) {
+                targetWithDetail.view_count = Number(targetWithDetail.discuss_num);
+            }
+            // 添加分享数（如果存在）
+
+            return {
+                title: item.topic_name,
+                link: item.topic_url?.replace(/&amp;/g, '&') || `https://tieba.baidu.com/hottopic/browse/hottopic?topic_id=${item.topic_id}`,
+                description: targetWithDetail,
+                pubDate: parseDate(item.create_time * 1000),
+                guid: `tieba-topic-${item.topic_id}`,
+            };
+        });
 
         return {
             title: '百度贴吧热议话题榜',

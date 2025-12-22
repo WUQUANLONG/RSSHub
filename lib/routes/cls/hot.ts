@@ -70,12 +70,19 @@ async function handler(ctx) {
                 if (articleDetail.ctime) {
                     articleDetail.ctime = formatDate(parseDate(articleDetail.ctime * 1000));
                 }
+                if (articleDetail.readingNum) {
+                    articleDetail.view_count = articleDetail.readingNum;
+                }
+                if (articleDetail.commentNum) {
+                    articleDetail.comment_count = articleDetail.commentNum;
+                }
+
 
                 item.description = articleDetail;
                 item.author = articleDetail.author?.name ?? item.author ?? '';
 
                 return item;
-            })
+            }, 5)
         )
     );
 
