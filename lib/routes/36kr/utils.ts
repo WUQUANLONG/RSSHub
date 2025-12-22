@@ -50,13 +50,9 @@ const ProcessItem = (item, tryGet) =>
             const detailResponse = await got({
                 method: 'get',
                 url: item.link,
-                // headers: {
-                //     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                // },
-                timeout: 10000, // 添加超时设置
-            }).catch(() => null); // 捕获 got 请求的异常
+                timeout: 10000,
+            }).catch(() => null);
 
-            // 如果文章获取失败，返回基本item信息
             if (!detailResponse || !detailResponse.body) {
                 console.warn(`获取文章失败: ${item.link}`);
                 item.description = {
@@ -66,33 +62,103 @@ const ProcessItem = (item, tryGet) =>
                 return item;
             }
 
-            const cipherTextList = detailResponse.body.match(/{"state":"(.*)","isEncrypt":true}/) ?? [];
             let content_tmp = '';
+            let stat_tmp = null;
+            let initialState = null;
 
-            if (cipherTextList.length === 0) {
+            try {
                 const $ = load(detailResponse.body);
-                content_tmp = $('div.articleDetailContent').html() || '';
-            } else {
-                try {
-                    const key = CryptoJS.enc.Utf8.parse('efabccee-b754-4c');
-                    const content = JSON.parse(
-                        CryptoJS.AES.decrypt(cipherTextList[1], key, {
-                            mode: CryptoJS.mode.ECB,
-                            padding: CryptoJS.pad.Pkcs7,
-                        })
-                            .toString(CryptoJS.enc.Utf8)
-                            .toString()
-                    );
+                const scriptTags = $('script');
 
-                    // 添加安全访问
-                    content_tmp = content?.articleDetail?.articleDetailData?.data?.widgetContent || '';
-                } catch (decryptError) {
-                    console.warn(`解密失败: ${item.link}`, decryptError.message);
-                    content_tmp = '';
+                scriptTags.each((i, el) => {
+                    const scriptContent = $(el).html();
+                    if (scriptContent && scriptContent.includes('window.initialState')) {
+                        try {
+                            // 方法1：使用更简单的正则
+                            const match = scriptContent.match(/window\.initialState\s*=\s*(\{[\s\S]*\})(?:\s*;|$)/);
+                            if (match && match[1]) {
+                                initialState = JSON.parse(match[1]);
+                                return false;
+                            }
+
+                            // 方法2：直接查找等号位置
+                            const eqIndex = scriptContent.indexOf('window.initialState=');
+                            if (eqIndex !== -1) {
+                                const jsonStart = eqIndex + 'window.initialState='.length;
+                                let jsonStr = scriptContent.substring(jsonStart);
+
+                                // 移除可能的分号
+                                jsonStr = jsonStr.replace(/;\s*$/, '');
+
+                                // 尝试解析
+                                initialState = JSON.parse(jsonStr);
+                                return false;
+                            }
+                        } catch (error) {
+                            console.warn('解析 initialState 失败:', error.message);
+                        }
+                    }
+                });
+
+                // 从 initialState 中提取内容和统计信息
+                const articleDetail = initialState?.articleDetail;
+                if (articleDetail) {
+                    // 提取文章内容
+                    const articleDetailData = articleDetail?.articleDetailData?.data;
+                    if (articleDetailData?.widgetContent) {
+                        content_tmp = articleDetailData.widgetContent;
+                    }
+
+                    // 提取统计信息
+                    stat_tmp = articleDetail?.articleRecommendData || null;
+                }
+                // console.log('调试sssss', [initialState, stat_tmp]);
+            } catch (jsonError) {
+                console.warn(`解析 initialState 失败: ${item.link}`, jsonError.message);
+            }
+
+            // 如果从 initialState 没有提取到内容，回退到原来的解密逻辑
+            if (!content_tmp) {
+                const cipherTextList = detailResponse.body.match(/{"state":"(.*)","isEncrypt":true}/) ?? [];
+
+                if (cipherTextList.length === 0) {
+                    const $ = load(detailResponse.body);
+                    content_tmp = $('div.articleDetailContent').html() || '';
+                } else {
+                    try {
+                        const key = CryptoJS.enc.Utf8.parse('efabccee-b754-4c');
+                        const content = JSON.parse(
+                            CryptoJS.AES.decrypt(cipherTextList[1], key, {
+                                mode: CryptoJS.mode.ECB,
+                                padding: CryptoJS.pad.Pkcs7,
+                            })
+                                .toString(CryptoJS.enc.Utf8)
+                                .toString()
+                        );
+
+                        content_tmp = content?.articleDetail?.articleDetailData?.data?.widgetContent || '';
+
+                        // 如果之前没有获取到统计信息，现在获取
+                        if (!stat_tmp) {
+                            stat_tmp = content?.articleDetail?.articleRecommendData || null;
+                        }
+
+                    } catch (decryptError) {
+                        console.warn(`解密失败: ${item.link}`, decryptError.message);
+                        content_tmp = '';
+                    }
                 }
             }
 
-            // 安全地处理内容提取
+            // 如果还是没有内容，尝试其他可能的选择器
+            if (!content_tmp) {
+                const $ = load(detailResponse.body);
+                content_tmp = $('div.articleDetailContent').html() ||
+                    $('article.content').html() ||
+                    $('.article-content').html() ||
+                    $('.content-wrapper').html() || '';
+            }
+
             let content_text = '';
             let content_images = [];
 
@@ -108,27 +174,47 @@ const ProcessItem = (item, tryGet) =>
                 console.warn(`图片提取失败: ${item.link}`, imageError.message);
             }
 
-            const articleDetailTmp = {
+            // 初始化描述对象
+            let articleDetailTmp = {
                 content: content_text || '暂无内容',
                 content_images: content_images || []
             };
+
+            // 添加文章统计信息（只有有值时才添加）
+            if (stat_tmp && typeof stat_tmp === 'object') {
+                if (stat_tmp.statPraise !== undefined && stat_tmp.statPraise !== null) {
+                    articleDetailTmp.like_count = Number(stat_tmp.statPraise);
+                }
+                if (stat_tmp.statComment !== undefined && stat_tmp.statComment !== null) {
+                    articleDetailTmp.comment_count = Number(stat_tmp.statComment);
+                }
+                if (stat_tmp.statCollect !== undefined && stat_tmp.statCollect !== null) {
+                    articleDetailTmp.collect_count = Number(stat_tmp.statCollect);
+                }
+                if (stat_tmp.statArticle !== undefined && stat_tmp.statArticle !== null) {
+                    articleDetailTmp.view_count = Number(stat_tmp.statArticle);
+                }
+                // 添加分享数（如果存在）
+                if (stat_tmp.statShare !== undefined && stat_tmp.statShare !== null) {
+                    articleDetailTmp.share_count = Number(stat_tmp.statShare);
+                }
+            }
+
+            // 如果从 initialState 获取到了其他有用信息，也可以添加
+            // 暂时不需要
 
             item.description = articleDetailTmp;
             return item;
 
         } catch (error) {
-            // 捕获所有未处理的异常
             console.warn(`处理文章时发生未知错误: ${item.link}`, error.message);
-
-            // 返回带有基本信息的item
             item.description = {
                 content: '文章内容获取失败',
                 content_images: []
             };
             return item;
         }
-    }).catch(() => {
-        // 处理 tryGet 的缓存错误
+    }, 5).catch(() => {
         console.warn(`缓存获取失败: ${item.link}`);
         item.description = {
             content: '文章内容获取失败',
