@@ -73,10 +73,29 @@ async function handler(ctx) {
     const response = await got({
         method: 'get',
         url: currentUrl,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Chromium";v="94", "Google Chrome";v="94", ";Not A Brand";v="99"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'DNT': '1'
+        },
+        timeout: 30000,
+        retry: 2
     });
-
+    // console.log('ssssss', response.data);
     const data = getProperty(JSON.parse(response.data.match(/window.initialState=({.*})/)[1]), categories[category].key);
-
+    // console.log('sssss', data);
     let items = data
         .slice(0, ctx.req.query('limit') ? Number.parseInt(ctx.req.query('limit')) : 10)
         .filter((item) => item.itemType !== 0)
@@ -87,7 +106,8 @@ async function handler(ctx) {
                 author: item.authorName,
                 pubDate: parseDate(item.publishTime),
                 link: `${rootUrl}/p/${item.itemId}`,
-                description: item.summary,
+                id: item.itemId,
+                description: item,
             };
         });
 

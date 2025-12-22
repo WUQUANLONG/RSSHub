@@ -1,7 +1,7 @@
 import got from '@/utils/got';
 import { load } from 'cheerio';
 import CryptoJS from 'crypto-js';
-
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 const rootUrl = 'https://www.36kr.com';
 
 const ProcessItem = (item, tryGet) =>
@@ -12,10 +12,11 @@ const ProcessItem = (item, tryGet) =>
         });
 
         const cipherTextList = detailResponse.data.match(/{"state":"(.*)","isEncrypt":true}/) ?? [];
-
+        let content = ''
         if (cipherTextList.length === 0) {
             const $ = load(detailResponse.body);
-            item.description = $('div.articleDetailContent').html();
+            content = $('div.articleDetailContent').html();
+
         } else {
             const key = CryptoJS.enc.Utf8.parse('efabccee-b754-4c');
             const content = JSON.parse(
@@ -26,9 +27,16 @@ const ProcessItem = (item, tryGet) =>
                     .toString(CryptoJS.enc.Utf8)
                     .toString()
             ).articleDetail.articleDetailData.data;
-            item.description = content.widgetContent;
-        }
 
+            content = content.widgetContent;
+
+        }
+        let content_text = decodeAndExtractText(content);
+        let content_images = extractImageUrlsWithCheerio(content);
+        let articleDetailTmp = {}
+        articleDetailTmp.content = content_text;
+        articleDetailTmp.content_images = content_images;
+        item.description = articleDetailTmp;
         return item;
     });
 
