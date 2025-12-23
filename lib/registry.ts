@@ -205,7 +205,12 @@ for (const namespace in namespaces) {
                 ctx.set('data', response);
             }
         };
-        subApp.get(path, wrappedHandler);
+        if (routeData.method == 'post') {
+            subApp.post(path, wrappedHandler);
+        } else {
+            subApp.get(path, wrappedHandler);
+        }
+
     }
 }
 
