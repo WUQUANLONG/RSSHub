@@ -90,6 +90,7 @@ export const handler = async (ctx) => {
     //         <span class="arc-title">
     // <a target="_blank" title="报告：中国可持续发展综合指数连续稳步增长" href="http://news.10jqka.com.cn/20251218/c673309184.shtml" class="news-link" data-seq="673309184">报告：中国可持续发展综合指数连续稳步增长</a>
     // <span>12月18日 14:19</span>
+
     const $ = load(iconv.decode(currentResponse, 'gbk'));
     const hrefs = [];
     $('.content-1200 .arc-title .news-link').each((index, element) => {
@@ -137,7 +138,7 @@ export const handler = async (ctx) => {
                 // 返回一个降级的项目
                 return null;
             }
-        });
+        }, 5);
 
         if (item) {
             items.push(item);

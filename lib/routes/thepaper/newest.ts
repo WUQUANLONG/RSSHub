@@ -168,7 +168,7 @@ async function handler(ctx) {
                             articleDetail.content = item.title;
                             articleDetail.content_images = [];
                         }
-
+                        let metrics = {}
                         // 通过接口，获取 点赞数，和 帖子的评论数
                         //https://api.thepaper.cn/contentapi/article/detail/interaction/state?contId=32224527&contentType=1
                         const likeCountRes = await got({
@@ -182,7 +182,7 @@ async function handler(ctx) {
                         });
                         // console.log('调试aaa1', likeCountRes);
                         if (likeCountRes?.data?.data?.praiseTimes) {
-                            articleDetail.like_count = Number(likeCountRes.data.data.praiseTimes);
+                            metrics.like_count = Number(likeCountRes.data.data.praiseTimes);
                         }
                         const commentCountRes = await got({
                             method: 'post',
@@ -196,12 +196,12 @@ async function handler(ctx) {
                         });
                         // console.log('调试aaa2', commentCountRes);
                         if (commentCountRes?.data?.data?.commentNum) {
-                            articleDetail.comment_count = Number(commentCountRes.data.data.commentNum);
+                            metrics.comment_count = Number(commentCountRes.data.data.commentNum);
                         }
 
                         item.description = articleDetail;
                         item.author = articleDetail?.author?.name ?? item.author ?? '';
-
+                        item.metrics = metrics;
                         return item;
 
                     } catch (error) {
