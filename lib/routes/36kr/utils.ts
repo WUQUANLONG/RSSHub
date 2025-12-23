@@ -1,3 +1,4 @@
+// import got from '@/utils/got-scraping';
 import got from '@/utils/got';
 import { load } from 'cheerio';
 import CryptoJS from 'crypto-js';
@@ -51,7 +52,11 @@ const ProcessItem = (item, tryGet) =>
                 method: 'get',
                 url: item.link,
                 timeout: 10000,
-            }).catch(() => null);
+                http2: false,
+                headers: {
+                    //'x-prefer-proxy': 1
+                },
+            });
 
             if (!detailResponse || !detailResponse.body) {
                 console.warn(`获取文章失败: ${item.link}`);

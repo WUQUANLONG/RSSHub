@@ -1,5 +1,6 @@
 import { Route } from '@/types';
 import cache from '@/utils/cache';
+// import got from '@/utils/got-scraping';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 
@@ -77,6 +78,7 @@ async function handler(ctx) {
     const response = await got({
         method: 'get',
         url: currentUrl,
+        http2: false,
         headers: {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -97,6 +99,14 @@ async function handler(ctx) {
         timeout: 30000,
         retry: 2
     });
+    // const response = await got(currentUrl,{
+    //     method: 'get',
+    //     timeout: 10000,
+    //     // headers: {
+    //     //     //'x-prefer-proxy': 1
+    //     // },
+    // }).catch(() => null);
+
     console.log('ssssss', response.data);
     const data = getProperty(JSON.parse(response.data.match(/window.initialState=({.*})/)[1]), categories[category].key);
     // console.log('sssss', data);
