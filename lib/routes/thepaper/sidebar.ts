@@ -170,10 +170,9 @@ async function handler(ctx) {
                     if (commentCountRes?.data?.data?.commentNum) {
                         metrics.comment_count = Number(commentCountRes.data.data.commentNum);
                     }
-
+                    articleDetail.metrics = metrics;
                     item.description = articleDetail;
                     item.author = articleDetail?.author?.name ?? item.author ?? '';
-                    item.metrics = metrics;
 
                     return item;
                 }, 5)
