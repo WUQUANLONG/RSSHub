@@ -92,6 +92,13 @@ async function handler(ctx) {
                 let content = data.content + (data.content_more ?? '');
                 data.content = decodeAndExtractText(content);
                 data.content_images = extractImageUrlsWithCheerio(content);
+
+                let metrics = {};
+                if (data.pageviews !== undefined) {
+                    metrics.view_count = data.pageviews;
+                    data.metrics = metrics;
+                }
+
                 item.description = data;
 
                 item.category = data.asset_tags?.map((t) => t.name) ?? [];

@@ -40,18 +40,21 @@ export const handler = async (ctx) => {
         }
 
         item.article_time = pubDate;
-        if (item.read_num) {
-            item.view_count = item.read_num;
+
+        let metrics = {};
+        if (item.read_num !== undefined) {
+            metrics.view_count = item.read_num;
         }
-        if (item.comments_num) {
-            item.comment_count = item.comments_num;
+        if (item.comments_num !== undefined) {
+            metrics.comment_count = item.comments_num;
         }
-        if (item.collection_num) {
-            item.collect_count = item.collection_num;
+        if (item.collection_num !== undefined) {
+            metrics.collect_count = item.collection_num;
         }
-        if (item.share_num) {
-            item.share_count = item.share_num;
+        if (item.share_num !== undefined) {
+            metrics.share_count = item.share_num;
         }
+        item.metrics = metrics;
 
         return {
             title: title,
@@ -60,8 +63,8 @@ export const handler = async (ctx) => {
             link: new URL(`detail/${item.article_id}`, rootUrl).href,
             category: item.subjects.map((s) => s.subject_name),
             author: item.article_author,
-            guid: `cls-article-${item.article_id}`,
-            id: `cls-article-${item.article_id}`,
+            guid: `${item.article_id}`,
+            id: `${item.article_id}`,
         };
     });
 

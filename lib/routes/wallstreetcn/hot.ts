@@ -65,7 +65,7 @@ async function handler(ctx) {
                 data.content = decodeAndExtractText(content);
                 data.content_images = extractImageUrlsWithCheerio(content);
                 let metrics = {};
-                if (data?.pageviews) {
+                if (data.pageviews !== undefined) {
                     metrics.view_count = data.pageviews;
                     data.metrics = metrics;
                 }

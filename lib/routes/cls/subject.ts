@@ -30,15 +30,8 @@ export const handler = async (ctx) => {
         let contnet = {}
         contnet.content = decodeAndExtractText(item.article_brief);
         contnet.content_images = [];
-        const guid = `cls-${item.article_id}`;
+        const guid = `${item.article_id}`;
         const image = item.article_img;
-
-        if (item.read_num) {
-            contnet.view_count = item.read_num;
-        }
-        if (item.share_num) {
-            contnet.share_count = item.share_num;
-        }
 
         return {
             title,
@@ -71,11 +64,17 @@ export const handler = async (ctx) => {
                 let contnet = {}
                 contnet.content = decodeAndExtractText(data.content);
                 contnet.content_images = extractImageUrlsWithCheerio(data.content);
-                if (data.readingNum) {
-                    contnet.view_count = data.readingNum;
-                }
 
-                const guid = `cls-${data.id}`;
+                let metrics = {};
+                if (data.readingNum !== undefined) {
+                    metrics.view_count = data.readingNum;
+                }
+                if (data.commentNum !== undefined) {
+                    metrics.comment_count = data.commentNum;
+                }
+                contnet.metrics = metrics;
+
+                const guid = `${data.id}`;
                 const image = data.images?.[0] ?? undefined;
 
                 item.title = title;
@@ -120,7 +119,7 @@ export const route: Route = {
     path: '/subject/:id?',
     name: '话题',
     url: 'www.cls.cn',
-    maintainers: ['nczitzk'],
+    maintainers: ['wuquanlong'],
     handler,
     example: '/cls/subject/1103',
     parameters: { category: '分类，默认为 1103，即A股盘面直播，可在对应话题页 URL 中找到' },
@@ -144,7 +143,6 @@ export const route: Route = {
             source: ['www.cls.cn/subject/:id'],
             target: (params) => {
                 const id = params.id;
-
                 return `/subject${id ? `/${id}` : ''}`;
             },
         },

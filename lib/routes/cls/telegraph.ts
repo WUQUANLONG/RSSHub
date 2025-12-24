@@ -73,18 +73,27 @@ async function handler(ctx) {
             ? formatDate(parseDate(item.modified_time * 1000))
             : '';
         let tmp = item
-        if (item.reading_num) {
-            tmp.view_count = item.reading_num;
+        let metrics = {};
+        if (item.reading_num !== undefined) {
+            metrics.view_count = item.reading_num;
         }
+        if (item.share_num !== undefined) {
+            metrics.share_count = item.share_num;
+        }
+        if (item.comment_num !== undefined) {
+            metrics.comment_count = item.comment_num;
+        }
+
         tmp.ctime = formattedCtime;
         tmp.modified_time = formattedModifiedTime;
+        tmp.metrics = metrics;
         return {
+            id: `${item.id}`,
             title: item.title || item.content,
-            link: item.shareurl,
+            link: `${rootUrl}/detail/${item.id}`,
             description: tmp, // 注意：这里传入了原始对象，可能不是好主意
             pubDate: formattedCtime, // RSS 需要 Date 对象，不是格式化字符串
             category: item.subjects?.map((s) => s.subject_name) || [],
-
         };
     });
 

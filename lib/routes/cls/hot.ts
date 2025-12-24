@@ -29,7 +29,7 @@ export const route: Route = {
         },
     ],
     name: '热门文章排行榜',
-    maintainers: ['5upernova-heng', 'nczitzk'],
+    maintainers: ['wuquanlong'],
     handler,
     url: 'cls.cn/',
 };
@@ -70,12 +70,18 @@ async function handler(ctx) {
                 if (articleDetail.ctime) {
                     articleDetail.ctime = formatDate(parseDate(articleDetail.ctime * 1000));
                 }
-                if (articleDetail.readingNum) {
-                    articleDetail.view_count = articleDetail.readingNum;
+
+                let metrics = {};
+                if (articleDetail.readingNum !== undefined) {
+                    metrics.view_count = articleDetail.readingNum;
                 }
-                if (articleDetail.commentNum) {
-                    articleDetail.comment_count = articleDetail.commentNum;
+                if (articleDetail.commentNum !== undefined) {
+                    metrics.comment_count = articleDetail.commentNum;
                 }
+                if (articleDetail.shareNum !== undefined) {
+                    metrics.share_count = item.shareNum;
+                }
+                articleDetail.metrics = metrics;
 
 
                 item.description = articleDetail;
