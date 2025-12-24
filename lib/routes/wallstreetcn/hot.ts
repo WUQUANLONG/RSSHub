@@ -49,6 +49,8 @@ async function handler(ctx) {
     items = await Promise.all(
         items.map((item) =>
             cache.tryGet(item.link, async () => {
+
+
                 const detailResponse = await got({
                     method: 'get',
                     url: `${apiRootUrl}/apiv1/content/articles/${item.guid}?extract=0`,
@@ -62,7 +64,12 @@ async function handler(ctx) {
                 let content = data.content + (data.content_more ?? '');
                 data.content = decodeAndExtractText(content);
                 data.content_images = extractImageUrlsWithCheerio(content);
-                data.view_count = data.pageviews;
+                let metrics = {};
+                if (data?.pageviews) {
+                    metrics.view_count = data.pageviews;
+                    data.metrics = metrics;
+                }
+
                 item.description = data;
 
                 item.category = data.asset_tags?.map((t) => t.name) ?? [];

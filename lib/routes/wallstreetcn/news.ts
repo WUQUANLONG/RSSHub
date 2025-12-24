@@ -60,8 +60,9 @@ async function handler(ctx) {
 
     let items = response.data.data.items
         .filter((item) => {
-            return item.resource_type !== 'ad' &&
-                item.resource_type !== 'theme';
+            return item.resource_type !== 'ad' &&   // ad，live theme 这些 都没展示没用到，都去掉
+                item.resource_type !== 'theme' &&
+                item.resource_type !== 'live';
         })
         .map((item) => ({
             type: item.resource_type,
@@ -73,9 +74,15 @@ async function handler(ctx) {
     items = await Promise.all(
         items.map((item) =>
             cache.tryGet(item.link, async () => {
+
+                // 数据有几种类型， theme live article 目前 theme live 在pc 端页面未展示
+                // article https://api-one-wscn.awtmt.com/apiv1/content/articles/3761829?extract=0
+                const url_tmp = `${apiRootUrl}/apiv1/content/articles/${item.guid}?extract=0`;
+                //const url_tmp = `${apiRootUrl}/apiv1/content/${item.type === 'chart' ? `charts/${item.guid}` : `articles/${item.guid}?extract=0`}`;
+
                 const detailResponse = await got({
                     method: 'get',
-                    url: `${apiRootUrl}/apiv1/content/${item.type === 'live' ? `lives/${item.guid}` : `articles/${item.guid}?extract=0`}`,
+                    url: url_tmp,
                 });
 
                 const responseData = detailResponse.data;
@@ -93,6 +100,13 @@ async function handler(ctx) {
                 let content = data.content + (data.content_more ?? '');
                 data.content = decodeAndExtractText(content);
                 data.content_images = extractImageUrlsWithCheerio(content);
+                let metrics = {};
+                if (data?.pageviews) {
+                    metrics.view_count = data.pageviews;
+                    data.metrics = metrics;
+                }
+
+                data.source_type = item.type;
                 item.description = data;
 
                 item.category = data.asset_tags?.map((t) => t.name) ?? [];
@@ -103,11 +117,13 @@ async function handler(ctx) {
                     item.itunes_item_image = data.image?.uri ?? '';
                     item.itunes_duration = data.audio_info?.duration ?? '';
                 }
-
+                item.id = `${item.guid}`;
+                item.url = url_tmp;
+                item.link = url_tmp;
                 delete item.type;
 
                 return item;
-            })
+            }, 5)
         )
     );
 
