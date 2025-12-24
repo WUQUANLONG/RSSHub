@@ -32,13 +32,14 @@ export const handler = async (ctx) => {
     const items =
         response.data?.list.slice(0, limit).map((item) => {
             const title = item.title;
-            const description = item.digest;
-            const guid = `10jqka-${item.seq}`;
+            const guid = `${item.seq}`;
             const image = item.picUrl;
             item.ctime = parseDate(item.ctime, 'X');
             item.rtime = parseDate(item.rtime, 'X');
             item.ctime = formatDate(new Date(item.ctime), 'YYYY-MM-DD HH:mm:ss');
             item.rtime = formatDate(new Date(item.rtime), 'YYYY-MM-DD HH:mm:ss');
+            item.content = item.digest;
+
             return {
                 title,
                 description: item,

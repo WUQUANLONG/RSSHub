@@ -95,62 +95,71 @@ export const handler = async (ctx) => {
     const hrefs = [];
     $('.content-1200 .arc-title .news-link').each((index, element) => {
         const href = $(element).attr('href');
+        const seq = $(element).attr('data-seq');
         if (href) {
-            hrefs.push(href);
+            hrefs.push({url: href, id: seq});
         }
     });
     //console.log('sssss', hrefs);
     // 遍历 hrefs 来回去数据
-    let items = [];
-    for (const hurl of hrefs) {
-        const item = await cache.tryGet(hurl, async () => {
-            try {
-                // 1. 获取页面
-                const response = await got(hurl, {
-                    responseType: 'buffer',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                        'Referer': 'http://news.10jqka.com.cn/',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    },
-                });
+    let processedItems = await Promise.all(
+        hrefs.map((hurl) => cache.tryGet(hurl.url, async () => {
+                try {
+                    // 1. 获取页面
+                    const response = await got(hurl.url, {
+                        responseType: 'buffer',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Referer': 'http://news.10jqka.com.cn/',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        },
+                    });
 
-                // 2. 解码 GBK
-                const html = iconv.decode(response.data, 'gbk');
+                    // 2. 解码 GBK
+                    const html = iconv.decode(response.data, 'gbk');
 
-                // 3. 解析数据
-                const res = extractArticleSimple(html);
+                    // 3. 解析数据
+                    const res = extractArticleSimple(html);
 
-                if (res) {
-                    return {
-                        title: res.title,
-                        description: res.description,
-                        pubDate: res.pubDate,
-                        link: hurl,
-                        guid : hurl,
-                        id: hurl,
-                    };
+                    // 4，计算阅读数据
+                    // https://comment.10jqka.com.cn/faceajax.php?type=add&jsoncallback=showFace&faceid=2&seq=673309945
+                    const commen_url = `https://comment.10jqka.com.cn/faceajax.php?type=add&jsoncallback=showFace&faceid=2&seq=${hurl.id}`;
+                    const response2 = await got(commen_url);
+                    const html2 = iconv.decode(response2.data, 'gbk');
+                    const jsonMatch = html2.match(/showFace\(({[^}]+})\)/);
+                    let view_count = 0;
+                    if (jsonMatch && jsonMatch[1]) {
+                        const data = JSON.parse(jsonMatch[1]);
+                        view_count = data.result; // 324
+                    }
+                    res.description.metrics = {"view_count": view_count};
+
+                    if (res) {
+                        return {
+                            title: res.title,
+                            description: res.description,
+                            pubDate: res.pubDate,
+                            link: hurl.url,
+                            guid : hurl.id,
+                            id: hurl.id,
+                        };
+                    }
+                    return null; // 如果解析失败，返回 null
+
+                } catch (error) {
+                    console.error(`处理链接失败 ${hurl}:`, error.message);
+                    // 返回一个降级的项目
+                    return null;
                 }
-                return null; // 如果解析失败，返回 null
-
-            } catch (error) {
-                console.error(`处理链接失败 ${hurl}:`, error.message);
-                // 返回一个降级的项目
-                return null;
-            }
-        }, 5);
-
-        if (item) {
-            items.push(item);
-        }
-        // 可选：添加延迟避免请求过于频繁
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
+            }, 5)
+        )
+    );
+    processedItems = processedItems.filter((item) => item !== null);
 
     return {
         title: `同花顺财经 - ${title} - ${tagKey}`,
         link: currentUrl,
-        item: items,
+        item: processedItems,
         description: `同花顺财经 - ${title} - 最新`,
     };
 };
