@@ -6,6 +6,7 @@ import { load } from 'cheerio';
 import { parseDate } from '@/utils/parse-date';
 
 import { rootUrl, ProcessItem } from './utils';
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 
 const shortcuts = {
     '/information': '/information/web_news',
@@ -73,6 +74,10 @@ async function handler(ctx) {
         .filter((item) => item.itemType !== 0)
         .map((item) => {
             item = item.templateMaterial ?? item;
+            if (item.widgetContent !== undefined) {
+                item.content = item.widgetContent;
+            }
+
             return {
                 title: item.widgetTitle.replaceAll(/<\/?em>/g, ''),
                 author: item.author,
@@ -82,8 +87,9 @@ async function handler(ctx) {
                 id: item.itemId,
             };
         });
+    console.log('sss', path);
 
-    if (!/^\/(search|newsflashes)/.test(path)) {
+    if (!/^\/(newsflashes)/.test(path)) {
         items = await Promise.all(items.map((item) => ProcessItem(item, cache.tryGet)));
     }
 

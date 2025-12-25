@@ -3,6 +3,7 @@ import got from '@/utils/got';
 import { load } from 'cheerio';
 import CryptoJS from 'crypto-js';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {parseDate} from "@/utils/parse-date";
 const rootUrl = 'https://www.36kr.com';
 
 // const ProcessItem = (item, tryGet) =>
@@ -46,11 +47,11 @@ const rootUrl = 'https://www.36kr.com';
 //     });
 
 const ProcessItem = (item, tryGet) =>
-    tryGet(item.link, async () => {
+    tryGet(item.link || item.url, async () => {
         try {
             const detailResponse = await got({
                 method: 'get',
-                url: item.link,
+                url: item.link || item.url,
                 timeout: 10000,
                 http2: false,
                 headers: {
@@ -59,17 +60,14 @@ const ProcessItem = (item, tryGet) =>
             });
 
             if (!detailResponse || !detailResponse.body) {
-                console.warn(`获取文章失败: ${item.link}`);
-                item.description = {
-                    content: '获取文章内容失败',
-                    content_images: []
-                };
-                return item;
+                console.warn(`获取文章失败: ${item.link || item.url}`);
+                return null;
             }
 
             let content_tmp = '';
             let stat_tmp = null;
             let initialState = null;
+            let articleDetailData = null;
 
             try {
                 const $ = load(detailResponse.body);
@@ -107,9 +105,10 @@ const ProcessItem = (item, tryGet) =>
 
                 // 从 initialState 中提取内容和统计信息
                 const articleDetail = initialState?.articleDetail;
+
                 if (articleDetail) {
                     // 提取文章内容
-                    const articleDetailData = articleDetail?.articleDetailData?.data;
+                    articleDetailData = articleDetail?.articleDetailData?.data;
                     if (articleDetailData?.widgetContent) {
                         content_tmp = articleDetailData.widgetContent;
                     }
@@ -120,49 +119,9 @@ const ProcessItem = (item, tryGet) =>
                 // console.log('调试sssss', [initialState, stat_tmp]);
             } catch (jsonError) {
                 console.warn(`解析 initialState 失败: ${item.link}`, jsonError.message);
+                return null;
             }
 
-            // 如果从 initialState 没有提取到内容，回退到原来的解密逻辑
-            if (!content_tmp) {
-                const cipherTextList = detailResponse.body.match(/{"state":"(.*)","isEncrypt":true}/) ?? [];
-
-                if (cipherTextList.length === 0) {
-                    const $ = load(detailResponse.body);
-                    content_tmp = $('div.articleDetailContent').html() || '';
-                } else {
-                    try {
-                        const key = CryptoJS.enc.Utf8.parse('efabccee-b754-4c');
-                        const content = JSON.parse(
-                            CryptoJS.AES.decrypt(cipherTextList[1], key, {
-                                mode: CryptoJS.mode.ECB,
-                                padding: CryptoJS.pad.Pkcs7,
-                            })
-                                .toString(CryptoJS.enc.Utf8)
-                                .toString()
-                        );
-
-                        content_tmp = content?.articleDetail?.articleDetailData?.data?.widgetContent || '';
-
-                        // 如果之前没有获取到统计信息，现在获取
-                        if (!stat_tmp) {
-                            stat_tmp = content?.articleDetail?.articleRecommendData || null;
-                        }
-
-                    } catch (decryptError) {
-                        console.warn(`解密失败: ${item.link}`, decryptError.message);
-                        content_tmp = '';
-                    }
-                }
-            }
-
-            // 如果还是没有内容，尝试其他可能的选择器
-            if (!content_tmp) {
-                const $ = load(detailResponse.body);
-                content_tmp = $('div.articleDetailContent').html() ||
-                    $('article.content').html() ||
-                    $('.article-content').html() ||
-                    $('.content-wrapper').html() || '';
-            }
 
             let content_text = '';
             let content_images = [];
@@ -170,7 +129,7 @@ const ProcessItem = (item, tryGet) =>
             try {
                 content_text = decodeAndExtractText(content_tmp) || '';
             } catch (textError) {
-                console.warn(`文本提取失败: ${item.link}`, textError.message);
+                console.warn(`文本提取失败: ${item.link || item.url}`, textError.message);
             }
 
             try {
@@ -185,30 +144,39 @@ const ProcessItem = (item, tryGet) =>
                 content_images: content_images || []
             };
 
+            let metrics = {};
             // 添加文章统计信息（只有有值时才添加）
             if (stat_tmp && typeof stat_tmp === 'object') {
                 if (stat_tmp.statPraise !== undefined && stat_tmp.statPraise !== null) {
-                    articleDetailTmp.like_count = Number(stat_tmp.statPraise);
+                    metrics.like_count = Number(stat_tmp.statPraise);
                 }
                 if (stat_tmp.statComment !== undefined && stat_tmp.statComment !== null) {
-                    articleDetailTmp.comment_count = Number(stat_tmp.statComment);
+                    metrics.comment_count = Number(stat_tmp.statComment);
                 }
                 if (stat_tmp.statCollect !== undefined && stat_tmp.statCollect !== null) {
-                    articleDetailTmp.collect_count = Number(stat_tmp.statCollect);
+                    metrics.collect_count = Number(stat_tmp.statCollect);
                 }
                 if (stat_tmp.statArticle !== undefined && stat_tmp.statArticle !== null) {
-                    articleDetailTmp.view_count = Number(stat_tmp.statArticle);
+                    metrics.view_count = Number(stat_tmp.statArticle);
                 }
                 // 添加分享数（如果存在）
                 if (stat_tmp.statShare !== undefined && stat_tmp.statShare !== null) {
-                    articleDetailTmp.share_count = Number(stat_tmp.statShare);
+                    metrics.share_count = Number(stat_tmp.statShare);
                 }
             }
-
+            articleDetailTmp.metrics = metrics;
             // 如果从 initialState 获取到了其他有用信息，也可以添加
             // 暂时不需要
-
             item.description = articleDetailTmp;
+
+
+            // 补充一些基本信息
+            item.title = articleDetailData.widgetTitle.replaceAll(/<\/?em>/g, '');
+            item.author = articleDetailData.author;
+            item.pubDate = parseDate(articleDetailData.publishTime);
+            item.link = item.link || item.url;
+            item.id = articleDetailData.itemId;
+
             return item;
 
         } catch (error) {
