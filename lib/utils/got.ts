@@ -8,7 +8,7 @@ import iconv from 'iconv-lite';
 const curlNative = (url: string, options: any) => {
     // 使用 -s 隐藏进度条，-L 跟随重定向，-v 调试
     const args = ['-s', '-L'];
-
+    console.log('tiaoshi'，options);
     // 1. 严格按照你成功的命令处理代理
     if (options.proxyUri) {
         try {
@@ -110,49 +110,56 @@ const getFakeGot = (defaultOptions?: any) => {
 
         if (urlString.includes('10jqka.com.cn')) {
             return (async () => {
-                // 1. 创建一个临时的配置对象，用来接收 ofetch 注入的代理信息
+                // 1. 直接调用 ofetch 获取完整的配置（包括代理）
                 const tempOptions = { ...options, retry: 0 };
 
                 try {
-                    // 触发 ofetch 的 onRequest 逻辑
-                    await ofetch.raw(urlString, {
+                    // 使用一个虚拟请求触发 ofetch 的 onRequest 逻辑
+                    const rawResponse = await ofetch.raw(urlString, {
                         ...tempOptions,
                         method: 'HEAD',
-                        onResponse: () => {} // 尽早结束
-                    }).catch(() => {});
-                } catch (e) {}
+                        onResponse: () => {}, // 空回调避免实际请求
+                        onRequestError: () => {} // 捕获可能的错误
+                    }).catch(() => null);
 
-                // 2. 从 tempOptions 或 options 中提取 proxyUri
-                const finalProxy = (tempOptions as any).proxyUri || (options as any).proxyUri;
+                    console.log('rawResponse 状态:', rawResponse?.status);
+                } catch (e) {
+                    console.log('ofetch.raw 捕获错误（预期中）:', e.message);
+                }
 
-                // 3. 构造 Headers
-                const headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': 'https://news.10jqka.com.cn/',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Connection': 'keep-alive',
-                    ...options.headers
-                };
+                // 2. 【关键】从全局代理模块获取当前代理
+                let proxyUri;
 
-                // 4. 执行 Curl (传入提取到的动态代理)
-                const res = curlNative(urlString, { ...options, proxyUri: finalProxy, headers });
-                // 即使外部需要字符串，我们在这里也直接把原始 Buffer 给出去
-                // 这样你外部的 iconv.decode(response.data, 'gbk') 就能拿到真正的 GBK 字节流了
+                // 方法A：尝试从代理模块直接获取
+                try {
+                    const proxyModule = require('@/utils/proxy');
+                    const currentProxy = proxyModule.getCurrentProxy();
+                    if (currentProxy?.uri) {
+                        proxyUri = currentProxy.uri;
+                        console.log('从 proxy 模块获取代理:', proxyUri);
+                    }
+                } catch (e) {
+                    console.log('无法从 proxy 模块获取:', e.message);
+                }
+
+                // 方法B：如果方法A失败，回退到 ofetch 注入的方式
+                if (!proxyUri) {
+                    proxyUri = (tempOptions as any).proxyUri || (options as any).proxyUri;
+                    console.log('从 options 获取代理:', proxyUri);
+                }
+
+                // 3. 执行 Curl
+                const res = curlNative(urlString, {
+                    ...options,
+                    proxyUri: proxyUri,
+                    headers
+                });
+
                 return {
                     ...res,
                     data: res.data,
                     body: res.data
                 };
-                // // 5. 统一返回格式 因为是 gbk， 解码会出现问题
-                // const bodyBuffer = res.data;
-                // const bodyString = bodyBuffer.toString();
-                //
-                // return {
-                //     status: 200,
-                //     data: options.responseType === 'arrayBuffer' ? bodyBuffer : destr(bodyString),
-                //     body: options.responseType === 'arrayBuffer' ? bodyBuffer : bodyString,
-                //     headers: {} // 如果需要响应头，可以从 curl 的 stderr 中解析
-                // };
             })();
         }
 
