@@ -6,16 +6,17 @@ import iconv from 'iconv-lite';
 
 // 方案3：原生 Curl 执行器，解决 403 拦截和代理 407 认证问题
 const curlNative = (url: string, options: any) => {
-    // 使用 -L 跟随重定向，不再使用 -s 方便排查，上线稳定后可加回 -s
-    const args = ['-L', '-v'];
+    // 使用 -s 隐藏进度条，-L 跟随重定向，-v 调试
+    const args = ['-s', '-L'];
 
-    // 1. 处理代理：将 URL 中的账号密码剥离，解决 407 认证失败
+    // 1. 严格按照你成功的命令处理代理
     if (options.proxyUri) {
         try {
             const pUrl = new URL(options.proxyUri);
+            // 格式: -x http://host:port
             args.push('-x', `${pUrl.protocol}//${pUrl.host}`);
+            // 格式: --proxy-user user:pass
             if (pUrl.username && pUrl.password) {
-                // 使用专用参数传递认证，避免特殊字符导致解析错误
                 args.push('--proxy-user', `${pUrl.username}:${pUrl.password}`);
             }
         } catch (e) {
@@ -23,35 +24,43 @@ const curlNative = (url: string, options: any) => {
         }
     }
 
-    // 2. 转换 Headers 确保为纯对象并保持大小写
-    let finalHeaders: Record<string, string> = {};
-    if (options.headers instanceof Headers) {
-        finalHeaders = Object.fromEntries(options.headers.entries());
-    } else {
-        finalHeaders = options.headers || {};
-    }
+    // 2. 核心头部伪装 (只保留你测试成功的)
+    const essentialHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://news.10jqka.com.cn/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Connection': 'keep-alive'
+    };
+
+    // 合并头部，但要过滤掉 options 中可能存在的 node-fetch 自带头部
+    const inputHeaders = options.headers instanceof Headers
+        ? Object.fromEntries(options.headers.entries())
+        : (options.headers || {});
+
+    const finalHeaders = { ...essentialHeaders, ...inputHeaders };
+
+    // 过滤掉可能导致 Forbidden 的头部
+    const blackList = ['host', 'accept-encoding', 'content-length', 'content-type'];
 
     for (const [key, value] of Object.entries(finalHeaders)) {
-        if (typeof value === 'string') {
+        if (!blackList.includes(key.toLowerCase()) && typeof value === 'string') {
             args.push('-H', `${key}: ${value}`);
         }
     }
 
-    // 3. 强制对齐浏览器指纹特征
+    // 3. 基础 TLS 设置
     args.push('--tls-max', '1.3');
-    args.push('--http1.1'); // 强制使用 http1.1，对齐测试成功的 curl 环境
 
     args.push(url);
 
     const result = spawnSync('curl', args, {
-        encoding: null,
+        encoding: null, // 必须为 null，保持原始 Buffer 处理 GBK
         maxBuffer: 20 * 1024 * 1024,
         shell: false
     });
-    console.log('sssss', result);
+
     if (result.status !== 0) {
-        const errorLog = result.stderr?.toString() || 'Unknown Error';
-        throw new Error(`Native Curl Exit ${result.status}: ${errorLog.slice(-200)}`);
+        throw new Error(`Curl failed with status ${result.status}`);
     }
 
     return {
