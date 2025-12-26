@@ -132,6 +132,9 @@ importers:
       hono:
         specifier: 4.10.5
         version: 4.10.5
+      hpagent:
+        specifier: ^1.2.0
+        version: 1.2.0
       html-to-text:
         specifier: 9.0.5
         version: 9.0.5
@@ -3931,6 +3934,10 @@ packages:
 
   hookable@5.5.3:
     resolution: {integrity: sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ==}
+
+  hpagent@1.2.0:
+    resolution: {integrity: sha512-A91dYTeIB6NoXG+PxTQpCCDDnfHsW9kc06Lvpu1TEe9gnd6ZFeiBoRO9JvzEv6xK7EX97/dUE8g/vBMTqTS3CA==}
+    engines: {node: '>=14'}
 
   html-encoding-sniffer@4.0.0:
     resolution: {integrity: sha512-Y22oTqIU4uuPgEemfz7NDJz6OeKf12Lsu+QC+s3BVpda64lTiMYCyGwg5ki4vFxkMwQdeZDl2adZoqUgdFuTgQ==}
@@ -10024,6 +10031,8 @@ snapshots:
   hono@4.10.5: {}
 
   hookable@5.5.3: {}
+
+  hpagent@1.2.0: {}
 
   html-encoding-sniffer@4.0.0:
     dependencies:

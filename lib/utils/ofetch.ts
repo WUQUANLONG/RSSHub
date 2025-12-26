@@ -4,6 +4,7 @@ import logger, { maskProxyUri, proxyInfo, proxyError } from '@/utils/logger';
 import { register } from 'node-network-devtools';
 import type { HeaderGeneratorOptions } from 'header-generator';
 import proxy from '@/utils/proxy';
+import { HttpsProxyAgent } from 'hpagent';
 
 declare module 'ofetch' {
     interface FetchOptions {
@@ -136,20 +137,28 @@ const rofetch = createFetch().create({
 
             // Set up proxy configuration
             try {
-                const HttpAgent = (await import('agentkeepalive')).HttpsAgent;
-                context.options.agent = {
-                    [protocol]: new HttpAgent({
-                        host,
-                        port: Number.parseInt(port),
-                        maxSockets: 50,
-                        maxFreeSockets: 10,
-                        timeout: 60000,
-                        freeSocketTimeout: 30000,
-                    }),
-                };
-
-                logger.info(`Using proxy ${maskProxyUri(currentProxy.uri)} for request ${context.request}`);
+                // const HttpAgent = (await import('agentkeepalive')).HttpsAgent;
+                // context.options.agent = {
+                //     [protocol]: new HttpAgent({
+                //         host,
+                //         port: Number.parseInt(port),
+                //         maxSockets: 50,
+                //         maxFreeSockets: 10,
+                //         timeout: 60000,
+                //         freeSocketTimeout: 30000,
+                //     }),
+                // };
+                // logger.info(`Using proxy ${maskProxyUri(currentProxy.uri)} for request ${context.request}`);
                 //logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+                const proxyUri = currentProxy.uri;
+                context.options.agent = new HttpsProxyAgent({
+                    keepAlive: true,
+                    keepAliveMsecs: 1000,
+                    maxSockets: 50,
+                    maxFreeSockets: 10,
+                    proxy: proxyUri // 直接传入完整的代理 URI，包括用户名密码
+                });
+                logger.info(`Using TRUE proxy tunnel ${maskProxyUri(proxyUri)} for ${context.request}`);
             } catch (error) {
                 logger.error('Failed to set up proxy for request:', error);
             }

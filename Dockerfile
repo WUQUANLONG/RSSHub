@@ -46,6 +46,19 @@ ENV NODE_ENV=production \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --headless=new"
 
+# 安装curl和其他有用的调试工具
+RUN apt-get update && \
+    apt-get install -y \
+    curl \
+    wget \
+    vim \
+    telnet \
+    net-tools \
+    iputils-ping \
+    htop \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
 # 1. 首先以 root 身份创建必要的目录并设置权限
 RUN mkdir -p /app/logs /app/cache && \
     chown -R pptruser:pptruser /app/logs /app/cache && \
