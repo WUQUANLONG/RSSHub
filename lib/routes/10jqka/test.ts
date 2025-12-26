@@ -72,8 +72,8 @@ async function handler() {
 
         // 2. 解码 GBK
         const html = iconv.decode(response.data, 'gbk');
-        console.log('HTML长度:', html.length);
-        console.log('HTML前500字符:', html.substring(0, 500));
+        //console.log('HTML长度:', html.length);
+        //console.log('HTML前500字符:', html.substring(0, 500));
 
         // 3. 加载 Cheerio
         let res = extractArticleSimple(html)

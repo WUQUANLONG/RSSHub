@@ -6,6 +6,7 @@ import type { HeaderGeneratorOptions } from 'header-generator';
 import proxy from '@/utils/proxy';
 import { HttpsProxyAgent } from 'hpagent';
 
+
 declare module 'ofetch' {
     interface FetchOptions {
         headerGeneratorOptions?: Partial<HeaderGeneratorOptions>;
@@ -135,6 +136,7 @@ const rofetch = createFetch().create({
             const protocol = currentProxy.uri.startsWith('https') ? 'https' : 'http';
             const [host, port] = currentProxy.uri.replace(/^https?:\/\//, '').split(':');
 
+
             // Set up proxy configuration
             try {
                 // const HttpAgent = (await import('agentkeepalive')).HttpsAgent;
@@ -161,13 +163,14 @@ const rofetch = createFetch().create({
                 ].join(':');
 
                 const proxyUri = currentProxy.uri;
+                (context.options as any).proxyUri = proxyUri;
                 context.options.agent = new HttpsProxyAgent({
                     keepAlive: true,
                     proxy: currentProxy.uri,
                     // 关键配置
                     ciphers: chromeCiphers,
                     minVersion: 'TLSv1.2',
-                    secureOptions: crypto.constants.SSL_OP_NO_SSLv2 | crypto.constants.SSL_OP_NO_SSLv3
+                    //secureOptions: crypto.constants.SSL_OP_NO_SSLv2 | crypto.constants.SSL_OP_NO_SSLv3
                 });
                 logger.info(`Using TRUE proxy tunnel ${maskProxyUri(proxyUri)} for ${context.request}`);
             } catch (error) {
