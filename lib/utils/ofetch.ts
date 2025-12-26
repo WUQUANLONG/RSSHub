@@ -150,13 +150,24 @@ const rofetch = createFetch().create({
                 // };
                 // logger.info(`Using proxy ${maskProxyUri(currentProxy.uri)} for request ${context.request}`);
                 //logger.info(`Proxy connection details - Host: ${host}, Port: ${port}, Protocol: ${protocol}`);
+                const chromeCiphers = [
+                    'TLS_AES_128_GCM_SHA256',
+                    'TLS_AES_256_GCM_SHA384',
+                    'TLS_CHACHA20_POLY1305_SHA256',
+                    'ECDHE-ECDSA-AES128-GCM-SHA256',
+                    'ECDHE-RSA-AES128-GCM-SHA256',
+                    'ECDHE-ECDSA-AES256-GCM-SHA384',
+                    'ECDHE-RSA-AES256-GCM-SHA384'
+                ].join(':');
+
                 const proxyUri = currentProxy.uri;
                 context.options.agent = new HttpsProxyAgent({
                     keepAlive: true,
-                    keepAliveMsecs: 1000,
-                    maxSockets: 50,
-                    maxFreeSockets: 10,
-                    proxy: proxyUri // 直接传入完整的代理 URI，包括用户名密码
+                    proxy: currentProxy.uri,
+                    // 关键配置
+                    ciphers: chromeCiphers,
+                    minVersion: 'TLSv1.2',
+                    secureOptions: crypto.constants.SSL_OP_NO_SSLv2 | crypto.constants.SSL_OP_NO_SSLv3
                 });
                 logger.info(`Using TRUE proxy tunnel ${maskProxyUri(proxyUri)} for ${context.request}`);
             } catch (error) {
