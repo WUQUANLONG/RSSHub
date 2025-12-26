@@ -2,6 +2,7 @@ import { destr } from 'destr';
 import ofetch from '@/utils/ofetch';
 import { getSearchParamsString } from './helpers';
 import { spawnSync } from 'node:child_process';
+import iconv from 'iconv-lite';
 
 // 方案3：原生 Curl 执行器，解决 403 拦截和代理 407 认证问题
 const curlNative = (url: string, options: any) => {
@@ -43,11 +44,11 @@ const curlNative = (url: string, options: any) => {
     args.push(url);
 
     const result = spawnSync('curl', args, {
-        encoding: 'buffer',
+        encoding: null,
         maxBuffer: 20 * 1024 * 1024,
         shell: false
     });
-
+    console.log('sssss', result);
     if (result.status !== 0) {
         const errorLog = result.stderr?.toString() || 'Unknown Error';
         throw new Error(`Native Curl Exit ${result.status}: ${errorLog.slice(-200)}`);
@@ -93,23 +94,30 @@ const getFakeGot = (defaultOptions?: any) => {
 
         // --- 特殊域名拦截逻辑 ---
         const urlString = typeof request === 'string' ? request : request.url;
-
+        console.log('调试', urlString, urlString.includes('10jqka.com.cn'));
         // 【核心拦截】：如果是同花顺请求，先调用 ofetch 触发 onRequest 填充代理
+        // 【核心拦截】：如果是同花顺请求
+        // @/utils/got.ts
+
         if (urlString.includes('10jqka.com.cn')) {
-            // 这里我们需要预执行一次 onRequest 逻辑来获取代理
-            // 最简单的办法是利用 ofetch 的 raw 模式或拦截器，但为了兼容性，
-            // 我们可以直接返回一个 Promise，在内部处理逻辑
             return (async () => {
-                // 构造一个临时的 context 来模拟 ofetch 的请求前拦截
-                const context: any = { request: urlString, options };
+                // 1. 创建一个临时的配置对象，用来接收 ofetch 注入的代理信息
+                const tempOptions = { ...options, retry: 0 };
 
-                // 借用 ofetch 的配置逻辑来填充 proxyUri 和 headers
-                // 这里 ofetch 会调用它的 onRequest 钩子
-                await ofetch.raw(urlString, { ...options, method: 'HEAD' }).catch(() => {});
+                try {
+                    // 触发 ofetch 的 onRequest 逻辑
+                    await ofetch.raw(urlString, {
+                        ...tempOptions,
+                        method: 'HEAD',
+                        onResponse: () => {} // 尽早结束
+                    }).catch(() => {});
+                } catch (e) {}
 
-                // 现在 options.proxyUri 应该已经被 ofetch.ts 填入了
-                // 强制对齐 Headers
-                options.headers = {
+                // 2. 从 tempOptions 或 options 中提取 proxyUri
+                const finalProxy = (tempOptions as any).proxyUri || (options as any).proxyUri;
+
+                // 3. 构造 Headers
+                const headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Referer': 'https://news.10jqka.com.cn/',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -117,16 +125,25 @@ const getFakeGot = (defaultOptions?: any) => {
                     ...options.headers
                 };
 
-                const res = curlNative(urlString, options);
-
-                // 如果是 buffer 模式直接返回，否则 destr 数据
-                if (options?.responseType === 'arrayBuffer' || options?.responseType === 'buffer') {
-                    return res;
-                }
+                // 4. 执行 Curl (传入提取到的动态代理)
+                const res = curlNative(urlString, { ...options, proxyUri: finalProxy, headers });
+                // 即使外部需要字符串，我们在这里也直接把原始 Buffer 给出去
+                // 这样你外部的 iconv.decode(response.data, 'gbk') 就能拿到真正的 GBK 字节流了
                 return {
                     ...res,
-                    data: destr(res.body.toString())
+                    data: res.data,
+                    body: res.data
                 };
+                // // 5. 统一返回格式 因为是 gbk， 解码会出现问题
+                // const bodyBuffer = res.data;
+                // const bodyString = bodyBuffer.toString();
+                //
+                // return {
+                //     status: 200,
+                //     data: options.responseType === 'arrayBuffer' ? bodyBuffer : destr(bodyString),
+                //     body: options.responseType === 'arrayBuffer' ? bodyBuffer : bodyString,
+                //     headers: {} // 如果需要响应头，可以从 curl 的 stderr 中解析
+                // };
             })();
         }
 

@@ -70,13 +70,24 @@ async function handler() {
             },
         });
 
-        // 2. 解码 GBK
-        const html = iconv.decode(response.data, 'gbk');
-        //console.log('HTML长度:', html.length);
+        let html = ''; // 1. 在外部定义变量
+
+        if (Buffer.isBuffer(response.data)) {
+            // 2. 将解码后的字符串赋值给外部变量
+            html = iconv.decode(response.data, 'gbk');
+        } else if (typeof response.data === 'string') {
+            // 兜底处理：如果是字符串（虽然设置 encoding: null 后不应该出现）
+            html = response.data;
+        } else {
+            // 如果是对象或其他类型，转为字符串
+            html = JSON.stringify(response.data);
+        }
+        //
+        console.log('HTML长度:', html.length);
         //console.log('HTML前500字符:', html.substring(0, 500));
 
         // 3. 加载 Cheerio
-        let res = extractArticleSimple(html)
+        let res = extractArticleSimple(html);
 
 
         return {

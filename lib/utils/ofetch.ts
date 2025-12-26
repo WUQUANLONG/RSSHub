@@ -176,8 +176,6 @@ const rofetch = createFetch().create({
             } catch (error) {
                 logger.error('Failed to set up proxy for request:', error);
             }
-
-
         }
 
         //console.log('请求头数', context.options.headers);
