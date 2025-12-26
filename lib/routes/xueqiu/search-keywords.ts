@@ -143,6 +143,25 @@ function processApiData(data: any, q: string) {
             pubDate = new Date(item.created_at);
         }
         item.text = decodeAndExtractText(text);
+        // 需要补充阅读数据  这个 view_count 在文章详情页，字段是0，不变化
+        // fav_count  retweet_count reply_count like_count  view_count
+        // retweet_count  fav_count reply_count like_count view_count
+        let metrics = {};
+        // if (item.view_count !== undefined) {
+        //     metrics.view_count = item.view_count;
+        // }
+        // reply_count
+        if (item.like_count !== undefined) {
+            metrics.like_count = item.like_count;
+        }
+
+        if (item.reply_count !== undefined) {
+            metrics.comment_count = item.reply_count;
+        }
+        if (item.fav_count !== undefined) {
+            metrics.collect_count = item.fav_count;
+        }
+        item.metrics = metrics;
 
         return {
             title: decodeAndExtractText(title),

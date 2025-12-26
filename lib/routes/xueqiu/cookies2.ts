@@ -150,7 +150,7 @@ export async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookie
                 }
             }
         },
-        120, // 缓存30分钟
+        1800, // 缓存30分钟
         false
     );
 }
