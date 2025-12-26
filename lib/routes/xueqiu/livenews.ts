@@ -124,6 +124,7 @@ async function handler(ctx) {
         // 处理新闻文本
         let text = item.text || '';
         item.text = decodeAndExtractText(text);
+        item.content = decodeAndExtractText(text);
         item.content_images = extractImageUrlsWithCheerio(text);
         // 格式化发布时间
         let pubDate;
@@ -132,7 +133,7 @@ async function handler(ctx) {
         }
 
         return {
-            title,
+            title: item.text,
             description: item,
             link,
             pubDate,
