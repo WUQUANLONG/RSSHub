@@ -1,6 +1,5 @@
-import got from '@/utils/got';
+import { request } from '@/utils/request';
 import { load } from 'cheerio';
-import iconv from 'iconv-lite';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 
 export const route: Route = {
@@ -61,7 +60,7 @@ async function handler() {
 
     try {
         // 1. 获取页面
-        const response = await got(url, {
+        const response = await request.get(url, {
             responseType: 'buffer',
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -69,26 +68,10 @@ async function handler() {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             },
         });
-
-        let html = ''; // 1. 在外部定义变量
-
-        if (Buffer.isBuffer(response.data)) {
-            // 2. 将解码后的字符串赋值给外部变量
-            html = iconv.decode(response.data, 'gbk');
-        } else if (typeof response.data === 'string') {
-            // 兜底处理：如果是字符串（虽然设置 encoding: null 后不应该出现）
-            html = response.data;
-        } else {
-            // 如果是对象或其他类型，转为字符串
-            html = JSON.stringify(response.data);
-        }
-        //
-        console.log('HTML长度:', html.length);
-        //console.log('HTML前500字符:', html.substring(0, 500));
+        let html = response.text('gbk');
 
         // 3. 加载 Cheerio
         let res = extractArticleSimple(html);
-
 
         return {
             title: '同花顺财经测试',
