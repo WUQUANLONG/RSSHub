@@ -48,7 +48,7 @@ function extractArticleSimple(html) {
 export const handler = async (ctx) => {
 
     // 从请求的请求体里面获取到 urls 的list，
-    // items = [{id: 3761964, url: "https://api-one.wallstcn.com/apiv1/content/articles/3761964?extract=0"]
+    // items = [{id: 673306913, url: "https://news.10jqka.com.cn/20251218/c673306913.shtml"]
     // @todo 获取请求中的 items
     // 从请求体获取 items 数据
     let items = [];
@@ -107,8 +107,8 @@ export const handler = async (ctx) => {
         } catch (parseError) {
             console.error('解析请求体数据失败:', parseError.message);
             return {
-                title: `澎湃新闻 - 历史要闻`,
-                link: 'https://www.thepaper.cn',
+                title: `同花顺财经 - 历史要闻`,
+                link: 'https://news.10jqka.com.cn',
                 item: [],
                 error: `解析请求数据失败: ${parseError.message}`
             };
@@ -117,10 +117,10 @@ export const handler = async (ctx) => {
 
     if (items.length === 0) {
             return {
-                title: `澎湃新闻 - 历史要闻`,
-                link: 'https://www.thepaper.cn',
+                title: `同花顺财经 - 历史要闻`,
+                link: 'https://news.10jqka.com.cn',
                 item: [],
-                description: `请通过 POST 请求提供文章列表数据。格式示例：{"urls": [{"id": "123", "url": "https://www.thepaper.cn/newsDetail_forward_123"}, ...]}`,
+                description: `请通过 POST 请求提供文章列表数据。格式示例：{"urls": [{"id": "673306913", "url": "https://news.10jqka.com.cn/20251218/c673306913.shtml"}, ...]}`,
                 error: '需要提供文章列表数据'
             };
         }
@@ -138,6 +138,7 @@ export const handler = async (ctx) => {
         items.map((hurl) => cache.tryGet(hurl.url, async () => {
             try {
                 // 1. 获取页面
+                // 1. 获取页面
                 const response = await got(hurl.url, {
                     responseType: 'buffer',
                     headers: {
@@ -146,6 +147,7 @@ export const handler = async (ctx) => {
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     },
                 });
+
                 // 2. 解码 GBK
                 const html = iconv.decode(response.data, 'gbk');
 
