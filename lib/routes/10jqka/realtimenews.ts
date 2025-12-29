@@ -3,6 +3,7 @@ import { request } from '@/utils/request';
 import { load } from 'cheerio';
 import iconv from 'iconv-lite';
 import {formatDate, parseDate} from '@/utils/parse-date';
+import got from "@/utils/got";
 
 
 export const handler = async (ctx) => {
@@ -13,34 +14,47 @@ export const handler = async (ctx) => {
     const apiUrl = new URL('tapp/news/push/stock', rootUrl).href;
     const currentUrl = new URL('realtimenews.html', rootUrl).href;
 
-    const response = await request.get(currentUrl, {
+    const response = await got(currentUrl, {
         responseType: 'buffer',
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
             'Referer': 'http://news.10jqka.com.cn/',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
-    let html = response.text('gbk');
-
+    let html = iconv.decode(response.data, 'gbk');
 
     const $ = load(html);
 
     const language = $('html').prop('lang');
 
-    const response2 = await request.get(apiUrl, {
+    // const response2 = await request.get(apiUrl, {
+    //     searchParams: {
+    //         page: 1,
+    //         tag: tag ?? '',
+    //     },
+    //     headers: {
+    //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    //         'Referer': 'http://news.10jqka.com.cn/',
+    //         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    //     },
+    // });
+    //  let resData = response2.json();
+
+    const response2 = await got(apiUrl, {
         searchParams: {
             page: 1,
             tag: tag ?? '',
         },
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
             'Referer': 'http://news.10jqka.com.cn/',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
+    let resData = response2.data;
     //console.log('ssss', response2);
-    let resData = response2.json();
+
 
     //console.log('ssss', resData);
     const items =

@@ -1,6 +1,8 @@
 import { request } from '@/utils/request';
+import got from '@/utils/got';
 import { load } from 'cheerio';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import iconv from "iconv-lite";
 
 export const route: Route = {
     path: '/test',
@@ -57,19 +59,19 @@ function extractArticleSimple(html) {
 
 async function handler() {
     const url = 'https://news.10jqka.com.cn/20251218/c673306913.shtml';
-
+    //const url = 'http://192.168.66.32:5001/debug';
     try {
         // 1. 获取页面
-        const response = await request.get(url, {
+        const response = await got(url, {
             responseType: 'buffer',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
                 'Referer': 'http://news.10jqka.com.cn/',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             },
         });
-        let html = response.text('gbk');
-
+        //let html = response.text('gbk');
+        let html = iconv.decode(response.data, 'gbk');
         // 3. 加载 Cheerio
         let res = extractArticleSimple(html);
 
