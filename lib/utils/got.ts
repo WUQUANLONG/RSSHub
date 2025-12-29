@@ -9,18 +9,15 @@ import proxy from '@/utils/proxy';
 // @/utils/got.ts
 
 const curlNative = (url: string, options: any) => {
+    // 1. 初始化基础参数
+    const args = ['-s', '-L', '--compressed']; // 加上 --compressed 自动处理 gzip
 
-    const args = ['-s', '-L'];
-
+    // 2. 代理设置
     if (options.proxyUri) {
         try {
             const proxyInstance = new URL(options.proxyUri);
-
-            // --- 关键修复：改回正确的参数名 ---
-            args.push('-p'); // 或者使用 '--proxytunnel'，注意没有中间的横杠
-
+            // 注意：-p 是 proxytunnel，通常配合 -x 使用
             args.push('-x', `${proxyInstance.protocol}//${proxyInstance.host}`);
-
             if (proxyInstance.username && proxyInstance.password) {
                 args.push('--proxy-user', `${proxyInstance.username}:${proxyInstance.password}`);
             }
@@ -29,22 +26,19 @@ const curlNative = (url: string, options: any) => {
         }
     }
 
-    // 2. 核心头部伪装 (只保留你测试成功的)
+    // 3. 头部处理
     const essentialHeaders: Record<string, string> = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://news.10jqka.com.cn/',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept': 'application/json, text/plain, */*', // 既然是调接口，明确声明接受 json
         'Connection': 'keep-alive'
     };
 
-    // 合并头部，但要过滤掉 options 中可能存在的 node-fetch 自带头部
     const inputHeaders = options.headers instanceof Headers
         ? Object.fromEntries(options.headers.entries())
         : (options.headers || {});
 
     const finalHeaders = { ...essentialHeaders, ...inputHeaders };
-
-    // 过滤掉可能导致 Forbidden 的头部
     const blackList = ['host', 'accept-encoding', 'content-length', 'content-type'];
 
     for (const [key, value] of Object.entries(finalHeaders)) {
@@ -53,33 +47,27 @@ const curlNative = (url: string, options: any) => {
         }
     }
 
-    // 3. 基础 TLS 设置
-    args.push('--tls-max', '1.3');
+    // 4. 协议与安全性设置 (只加一次)
+    args.push('--tls-max', '1.3', '--http1.1');
+    args.push('--connect-timeout', '10'); // 增加超时保护
 
+    // 5. 【关键】URL 必须最后且只加一次
     args.push(url);
-    // ... 其余逻辑保持不变 ...
-    if (options.headers) {
-        Object.entries(options.headers).forEach(([k, v]) => {
-            if (k && v && typeof v === 'string') args.push('-H', `${k}: ${v}`);
-        });
-    }
-
-    args.push('--tls-max', '1.3', '--http1.1', url);
 
     const result = spawnSync('curl', args, {
-        encoding: null, // 必须为 null，保持原始 Buffer 处理 GBK
+        encoding: null,
         maxBuffer: 20 * 1024 * 1024,
         shell: false
     });
 
-    //console.log('sssss', result);
     if (result.status !== 0) {
-        throw new Error(`Curl failed with status ${result.status}`);
+        const errorMsg = result.stderr ? result.stderr.toString() : 'Unknown Error';
+        throw new Error(`Curl failed [${result.status}]: ${errorMsg}`);
     }
 
     return {
         data: result.stdout,
-        body: result.stdout,
+        body: result.stdout, // 兼容性保留
         status: 200
     };
 };

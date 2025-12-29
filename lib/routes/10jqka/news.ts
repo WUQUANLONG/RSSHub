@@ -80,7 +80,7 @@ export const handler = async (ctx) => {
     const currentUrl = new URL(`/${tagKey}/index.shtml`, rootUrl).href;
 
     // 返回是 html，获取文章的列表，主要是列表中的 url
-    const { data: currentResponse } = await got(currentUrl, {
+    const response = await got(currentUrl, {
         responseType: 'buffer',
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -95,8 +95,19 @@ export const handler = async (ctx) => {
     //         <span class="arc-title">
     // <a target="_blank" title="报告：中国可持续发展综合指数连续稳步增长" href="http://news.10jqka.com.cn/20251218/c673309184.shtml" class="news-link" data-seq="673309184">报告：中国可持续发展综合指数连续稳步增长</a>
     // <span>12月18日 14:19</span>
+    let html = '';
+    if (Buffer.isBuffer(response.data)) {
+        // 2. 将解码后的字符串赋值给外部变量
+        html = iconv.decode(response.data, 'gbk');
+    } else if (typeof response.data === 'string') {
+        // 兜底处理：如果是字符串（虽然设置 encoding: null 后不应该出现）
+        html = response.data;
+    } else {
+        // 如果是对象或其他类型，转为字符串
+        html = JSON.stringify(response.data);
+    }
 
-    const $ = load(iconv.decode(currentResponse, 'gbk'));
+    const $ = load(html);
     const hrefs = [];
     $('.content-1200 .arc-title .news-link').each((index, element) => {
         const href = $(element).attr('href');

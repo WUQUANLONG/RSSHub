@@ -14,7 +14,7 @@ export const handler = async (ctx) => {
     const apiUrl = new URL('tapp/news/push/stock', rootUrl).href;
     const currentUrl = new URL('realtimenews.html', rootUrl).href;
 
-    const { data: currentResponse } = await got(currentUrl, {
+    const response = await got(currentUrl, {
         responseType: 'buffer',
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -22,20 +22,63 @@ export const handler = async (ctx) => {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
+    let html = ''; // 1. 在外部定义变量
 
-    const $ = load(iconv.decode(currentResponse, 'gbk'));
+    if (Buffer.isBuffer(response.data)) {
+        // 2. 将解码后的字符串赋值给外部变量
+        html = iconv.decode(response.data, 'gbk');
+    } else if (typeof response.data === 'string') {
+        // 兜底处理：如果是字符串（虽然设置 encoding: null 后不应该出现）
+        html = response.data;
+    } else {
+        // 如果是对象或其他类型，转为字符串
+        html = JSON.stringify(response.data);
+    }
+
+    const $ = load(html);
 
     const language = $('html').prop('lang');
 
-    const { data: response } = await got(apiUrl, {
+    const response2 = await got(apiUrl, {
         searchParams: {
             page: 1,
             tag: tag ?? '',
         },
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'http://news.10jqka.com.cn/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        },
     });
+    //console.log('ssss', response2);
+    let resString = '';
 
+    if (Buffer.isBuffer(response2.data)) {
+        // 1. 将整个二进制流从 GBK 转为 UTF-8 字符串
+        // 使用 gb18030 兼容性更好
+        resString = iconv.decode(response2.data, 'UTF-8');
+    } else if (typeof response2.data === 'string') {
+        // 如果已经变成了字符串且是乱码，说明在 curlNative 层面可能没传 encoding: null
+        resString = response2.data;
+    } else {
+        resString = JSON.stringify(response2.data);
+    }
+    //console.log('ssss', resString);
+    let resData = '';
+    try {
+        // 【关键】将字符串转换为真正的 JSON 对象
+        resData = JSON.parse(resString);
+        // 现在你可以像操作对象一样操作它了
+        //console.log('--- 解析成功 ---');
+        //console.log('第一条新闻标题:', resData.data.list[0].title);
+
+    } catch (e) {
+        console.error('JSON 解析失败，说明返回的内容不是标准 JSON 格式:', e);
+    }
+
+    //console.log('ssss', resData);
     const items =
-        response.data?.list.slice(0, limit).map((item) => {
+        resData.data?.list.slice(0, limit).map((item) => {
             const title = item.title;
             const guid = `${item.seq}`;
             const image = item.picUrl;
