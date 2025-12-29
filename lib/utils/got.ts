@@ -3,21 +3,26 @@ import ofetch from '@/utils/ofetch';
 import { getSearchParamsString } from './helpers';
 import { spawnSync } from 'node:child_process';
 import iconv from 'iconv-lite';
+import proxy from '@/utils/proxy';
 
 // 方案3：原生 Curl 执行器，解决 403 拦截和代理 407 认证问题
+// @/utils/got.ts
+
 const curlNative = (url: string, options: any) => {
-    // 使用 -s 隐藏进度条，-L 跟随重定向，-v 调试
+
     const args = ['-s', '-L'];
-    console.log('tiaoshi'，options);
-    // 1. 严格按照你成功的命令处理代理
+
     if (options.proxyUri) {
         try {
-            const pUrl = new URL(options.proxyUri);
-            // 格式: -x http://host:port
-            args.push('-x', `${pUrl.protocol}//${pUrl.host}`);
-            // 格式: --proxy-user user:pass
-            if (pUrl.username && pUrl.password) {
-                args.push('--proxy-user', `${pUrl.username}:${pUrl.password}`);
+            const proxyInstance = new URL(options.proxyUri);
+
+            // --- 关键修复：改回正确的参数名 ---
+            args.push('-p'); // 或者使用 '--proxytunnel'，注意没有中间的横杠
+
+            args.push('-x', `${proxyInstance.protocol}//${proxyInstance.host}`);
+
+            if (proxyInstance.username && proxyInstance.password) {
+                args.push('--proxy-user', `${proxyInstance.username}:${proxyInstance.password}`);
             }
         } catch (e) {
             args.push('-x', options.proxyUri);
@@ -52,6 +57,14 @@ const curlNative = (url: string, options: any) => {
     args.push('--tls-max', '1.3');
 
     args.push(url);
+    // ... 其余逻辑保持不变 ...
+    if (options.headers) {
+        Object.entries(options.headers).forEach(([k, v]) => {
+            if (k && v && typeof v === 'string') args.push('-H', `${k}: ${v}`);
+        });
+    }
+
+    args.push('--tls-max', '1.3', '--http1.1', url);
 
     const result = spawnSync('curl', args, {
         encoding: null, // 必须为 null，保持原始 Buffer 处理 GBK
@@ -59,6 +72,7 @@ const curlNative = (url: string, options: any) => {
         shell: false
     });
 
+    //console.log('sssss', result);
     if (result.status !== 0) {
         throw new Error(`Curl failed with status ${result.status}`);
     }
@@ -110,55 +124,58 @@ const getFakeGot = (defaultOptions?: any) => {
 
         if (urlString.includes('10jqka.com.cn')) {
             return (async () => {
-                // 1. 直接调用 ofetch 获取完整的配置（包括代理）
-                const tempOptions = { ...options, retry: 0 };
+                // --- 第一步：复用你提供的代理获取逻辑 ---
+                let currentProxy = proxy.getCurrentProxy();
 
-                try {
-                    // 使用一个虚拟请求触发 ofetch 的 onRequest 逻辑
-                    const rawResponse = await ofetch.raw(urlString, {
-                        ...tempOptions,
-                        method: 'HEAD',
-                        onResponse: () => {}, // 空回调避免实际请求
-                        onRequestError: () => {} // 捕获可能的错误
-                    }).catch(() => null);
-
-                    console.log('rawResponse 状态:', rawResponse?.status);
-                } catch (e) {
-                    console.log('ofetch.raw 捕获错误（预期中）:', e.message);
-                }
-
-                // 2. 【关键】从全局代理模块获取当前代理
-                let proxyUri;
-
-                // 方法A：尝试从代理模块直接获取
-                try {
-                    const proxyModule = require('@/utils/proxy');
-                    const currentProxy = proxyModule.getCurrentProxy();
-                    if (currentProxy?.uri) {
-                        proxyUri = currentProxy.uri;
-                        console.log('从 proxy 模块获取代理:', proxyUri);
+                if (currentProxy?.isDynamic && !currentProxy.uri) {
+                    if ((proxy as any).dynamicProxyPromise && typeof (proxy as any).dynamicProxyPromise === 'function') {
+                        try {
+                            const dynamicProxyPromiseFunc = (proxy as any).dynamicProxyPromise;
+                            const dynamicProxy = await dynamicProxyPromiseFunc();
+                            if (dynamicProxy) {
+                                const dynamicProxyResult = await dynamicProxy.getProxy();
+                                if (dynamicProxyResult) {
+                                    currentProxy = {
+                                        uri: dynamicProxyResult.uri,
+                                        isActive: true,
+                                        failureCount: 0,
+                                        urlHandler: dynamicProxyResult.urlHandler,
+                                        isDynamic: true,
+                                    };
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error getting dynamic proxy in Got:', error);
+                        }
                     }
-                } catch (e) {
-                    console.log('无法从 proxy 模块获取:', e.message);
                 }
 
-                // 方法B：如果方法A失败，回退到 ofetch 注入的方式
-                if (!proxyUri) {
-                    proxyUri = (tempOptions as any).proxyUri || (options as any).proxyUri;
-                    console.log('从 options 获取代理:', proxyUri);
-                }
+                const capturedProxyUri = currentProxy?.uri;
+                console.log('--- [GOT 拦截层] 最终捕获代理:', capturedProxyUri ? '已获取' : '未获取');
 
-                // 3. 执行 Curl
+                // --- 第二步：准备精简的 Headers ---
+                // 只保留你手动测试成功的核心头，避免 Docker 环境干扰
+                const finalHeaders = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://news.10jqka.com.cn/',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Connection': 'keep-alive'
+                };
+
+                // --- 第三步：执行 curlNative ---
+                // 传入 capturedProxyUri，确保护航
                 const res = curlNative(urlString, {
                     ...options,
-                    proxyUri: proxyUri,
-                    headers
+                    proxyUri: capturedProxyUri,
+                    headers: finalHeaders
                 });
 
+                // --- 第四步：Buffer 返回，对齐外部 iconv 处理 ---
                 return {
-                    ...res,
+                    status: 200,
                     data: res.data,
-                    body: res.data
+                    body: res.data,
+                    headers: {}
                 };
             })();
         }
