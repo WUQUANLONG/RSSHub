@@ -3,6 +3,7 @@ import cache from '@/utils/cache';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 export const route: Route = {
     path: '/search',
@@ -50,11 +51,16 @@ async function handler(ctx) {
     const apiRootUrl = 'https://api-one.wallstcn.com';
     const currentUrl = `${rootUrl}/search?q=${keyword}&type=info`;
     const apiUrl = `${apiRootUrl}/apiv1/search/article?query==${keyword}&cursor=&limit=20&vip_type=`;
-
+    const ua = getRandomHeaders();
+    const referer = 'https://wallstreetcn.com/';
     // 查询接口 https://api-one-wscn.awtmt.com/apiv1/search/article?query=keyword&cursor=&limit=20&vip_type=
     const response = await got({
         method: 'get',
         url: apiUrl,
+        headers: {
+            ...ua,
+            'Referer': referer,
+        },
     });
 
     let items = response.data.data.items
@@ -75,6 +81,10 @@ async function handler(ctx) {
                 const detailResponse = await got({
                     method: 'get',
                     url: `${apiRootUrl}/apiv1/content/${item.type === 'live' ? `lives/${item.guid}` : `articles/${item.guid}?extract=0`}`,
+                    headers: {
+                        ...ua,
+                        'Referer': referer,
+                    },
                 });
 
                 const responseData = detailResponse.data;

@@ -7,6 +7,7 @@ import {rootUrl} from "@/routes/cls/utils";
 import {parseDate} from "@/utils/parse-date";
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 import ofetch from "@/utils/ofetch";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 export const route: Route = {
     path: '/search',
@@ -80,19 +81,19 @@ async function handler(ctx) {
         }));
 
 
-        const processedItems = [];
-        for (const item of items) {
-            try{
-                const processedItem = await cache.tryGet(item.link, async () => {
+        const ua = getRandomHeaders();
+        const referer = 'https://www.thepaper.cn/';
+        const processedItems = (await Promise.all(
+            items.map(async (item) => {
+                return await cache.tryGet(item.link, async () => {
                     try {
                         const detailResponse = await got({
                             method: 'get',
                             url: item.link,
                             headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                'Referer': 'https://www.thepaper.cn/',
-                                'Accept': 'application/json, text/plain, */*',
-                            }
+                                ...ua,
+                                'Referer': referer,
+                            },
                         });
 
                         const content = load(detailResponse.data);
@@ -100,11 +101,7 @@ async function handler(ctx) {
 
                         if (!nextDataScript.length) {
                             console.warn('文章没有 __NEXT_DATA__ 脚本:', item.link);
-                            return {
-                                ...item,
-                                description: item.title,
-                                author: item.author || '',
-                            };
+                            return null; // 改为返回 null
                         }
 
                         let nextData;
@@ -112,20 +109,12 @@ async function handler(ctx) {
                             nextData = JSON.parse(nextDataScript.text());
                         } catch (error) {
                             console.warn('解析 __NEXT_DATA__ 失败:', item.link, error.message);
-                            return {
-                                ...item,
-                                description: item.title,
-                                author: item.author || '',
-                            };
+                            return null; // 改为返回 null
                         }
 
                         if (!nextData?.props?.pageProps?.detailData) {
                             console.warn('文章数据结构不完整:', item.link);
-                            return {
-                                ...item,
-                                description: item.title,
-                                author: item.author || '',
-                            };
+                            return null; // 改为返回 null
                         }
 
                         const contType = nextData.props.pageProps.detailData.contType;
@@ -154,35 +143,34 @@ async function handler(ctx) {
                         }
 
                         let metrics = {}
-                        // 通过接 口，获取 点赞数，和 帖子的评论数
-                        //https://api.thepaper.cn/contentapi/article/detail/interaction/state?contId=32224527&contentType=1
+                        // 通过接口，获取 点赞数，和 帖子的评论数
                         const likeCountRes = await got({
                             method: 'get',
                             url: `https://api.thepaper.cn/contentapi/article/detail/interaction/state?contId=${item.id}&contentType=1`,
                             headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                'Referer': 'https://www.thepaper.cn/',
-                                'Accept': 'application/json, text/plain, */*',
-                            }
+                                ...ua,
+                                'Referer': referer,
+                            },
                         });
-                        // console.log('调试aaa1', likeCountRes);
+
                         if (likeCountRes?.data?.data?.praiseTimes) {
                             metrics.like_count = Number(likeCountRes.data.data.praiseTimes);
                         }
+
                         const commentCountRes = await got({
                             method: 'post',
                             url: `https://api.thepaper.cn/comment/news/comment/count`,
                             headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                'Referer': 'https://www.thepaper.cn/',
-                                'Accept': 'application/json, text/plain, */*',
+                                ...ua,
+                                'Referer': referer,
                             },
-                            body: {contId: item.id}
+                            json: { contId: item.id } // 改为使用 json 选项
                         });
-                        // console.log('调试aaa2', commentCountRes);
+
                         if (commentCountRes?.data?.data?.commentNum) {
                             metrics.comment_count = Number(commentCountRes.data.data.commentNum);
                         }
+
                         articleDetail.metrics = metrics;
                         item.description = articleDetail;
                         item.author = articleDetail?.author?.name ?? item.author ?? '';
@@ -191,40 +179,21 @@ async function handler(ctx) {
 
                     } catch (error) {
                         console.error('处理文章时发生错误:', item.link, error.message);
-
-                        // 返回降级数据，确保有返回值
-                        return {
-                            ...item,
-                            description: `获取文章内容失败: ${error.message}`,
-                            author: item.author || '',
-                        };
+                        return null;
                     }
-                });
-                processedItems.push(processedItem);
-                // 可选：添加一个小的延迟，避免请求过于频繁
-                await new Promise(resolve => setTimeout(resolve, 500));
-            } catch (error) {
-                console.error(`处理项目失败: ${item.link}`, error);
-                // 即使失败也保留一个基础项
-                processedItems.push({
-                    ...item,
-                    description: '处理过程发生错误',
-                    author: item.author || '',
-                });
-            }
-        }
-
-        items = processedItems;
+                }, 5);
+            })
+        )).filter(Boolean); // 这里过滤 null
 
         // 再次检查 items 是否为空
-        if (items.length === 0) {
+        if (processedItems.length === 0) {
             throw new Error('No valid items found after processing');
         }
 
         return {
             title: `澎湃新闻 - 搜索 - ${keyword}`,
             link: 'https://www.thepaper.cn',
-            item: items,
+            item: processedItems,
             description: `澎湃新闻 - 搜索 - ${keyword}`,
         };
 

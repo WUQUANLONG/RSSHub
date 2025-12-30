@@ -3,6 +3,7 @@ import cache from '@/utils/cache';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 export const route: Route = {
     path: '/article/newest',
@@ -138,7 +139,8 @@ async function handler(ctx) {
         items = items.slice(0, MAX_ITEMS);
     }
 
-
+    const ua = getRandomHeaders();
+    const referer = 'https://wallstreetcn.com/';
     const apiRootUrl = 'https://api-one.wallstcn.com';
     let processedItems = [];
     processedItems = await Promise.all(
@@ -153,6 +155,10 @@ async function handler(ctx) {
                 const detailResponse = await got({
                     method: 'get',
                     url: url_tmp,
+                    headers: {
+                        ...ua,
+                        'Referer': referer,
+                    },
                 });
 
                 const responseData = detailResponse.data;

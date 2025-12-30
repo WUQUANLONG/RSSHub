@@ -3,6 +3,7 @@ import cache from '@/utils/cache';
 import got from '@/utils/got';
 import { parseDate } from '@/utils/parse-date';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 const titles = {
     global: '最新',
@@ -52,10 +53,16 @@ async function handler(ctx) {
     const apiRootUrl = 'https://api-one.wallstcn.com';
     const currentUrl = `${rootUrl}/news/${category}`;
     const apiUrl = `${apiRootUrl}/apiv1/content/information-flow?channel=${category}-channel&accept=article&limit=${ctx.req.query('limit') ?? 25}`;
+    const ua = getRandomHeaders();
+    const referer = 'https://wallstreetcn.com/';
 
     const response = await got({
         method: 'get',
         url: apiUrl,
+        headers: {
+            ...ua,
+            'Referer': referer,
+        },
     });
 
     let items = response.data.data.items
@@ -71,6 +78,8 @@ async function handler(ctx) {
             pubDate: parseDate(item.resource.display_time * 1000),
         }));
 
+
+
     items = await Promise.all(
         items.map((item) =>
             cache.tryGet(item.link, async () => {
@@ -83,6 +92,10 @@ async function handler(ctx) {
                 const detailResponse = await got({
                     method: 'get',
                     url: url_tmp,
+                    headers: {
+                        ...ua,
+                        'Referer': referer,
+                    },
                 });
 
                 const responseData = detailResponse.data;

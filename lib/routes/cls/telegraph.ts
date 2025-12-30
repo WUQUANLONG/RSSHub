@@ -6,6 +6,7 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
+import {getRandomHeaders} from "@/utils/random-ua";
 
 const categories = {
     watch: '看盘',
@@ -56,6 +57,8 @@ async function handler(ctx) {
     }
 
     const currentUrl = `${rootUrl}/telegraph`;
+    const ua = getRandomHeaders();
+    const referer = 'https://www.cls.cn/';
 
     const response = await got({
         method: 'get',
@@ -64,6 +67,10 @@ async function handler(ctx) {
             category,
             hasFirstVipArticle: 1,
         }),
+        headers: {
+            ...ua,
+            'Referer': referer,
+        },
     });
 
     const items = response.data.data.roll_data.slice(0, limit).map((item) => {

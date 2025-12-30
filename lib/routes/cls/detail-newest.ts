@@ -6,6 +6,7 @@ import { load } from 'cheerio';
 import { parseDate } from '@/utils/parse-date';
 
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 export const route: Route = {
     path: '/detail/newest',
@@ -125,12 +126,18 @@ async function handler(ctx) {
         console.warn(`请求 ${items.length} 个文章，超过限制 ${MAX_ITEMS}，将只处理前 ${MAX_ITEMS} 个`);
         items = items.slice(0, MAX_ITEMS);
     }
-
+    const ua = getRandomHeaders();
+    const referer = 'https://www.cls.cn/';
 
     items = await Promise.all(
         items.map((item) =>
             cache.tryGet(item.url, async () => {
-                const { data: detailResponse } = await got(item.url);
+                const { data: detailResponse } = await got(item.url, {
+                    headers: {
+                        ...ua,
+                        'Referer': referer,
+                    },
+                });
 
                 const $$ = load(detailResponse);
 

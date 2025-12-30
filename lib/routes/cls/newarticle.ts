@@ -8,6 +8,7 @@ import { art } from '@/utils/render';
 import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
+import {getRandomHeaders} from "@/utils/random-ua";
 
 export const handler = async (ctx) => {
     const timestampSeconds = Date.now() / 1000 | 0;
@@ -17,6 +18,8 @@ export const handler = async (ctx) => {
     // 需要注意，一定要有 last_article_time 秒级时间戳
 
     const apiUrl = new URL(`api/subject/attention/channel/articles/web`, rootUrl).href;
+    const ua = getRandomHeaders();
+    const referer = 'https://www.cls.cn/';
 
     const { data: response } = await got(apiUrl, {
         searchParams: getSearchParams({
@@ -27,6 +30,10 @@ export const handler = async (ctx) => {
             sv: '8.4.6',
             type: 2,
         }),
+        headers: {
+            ...ua,
+            'Referer': referer,
+        },
     });
     const items = response.data.map((item) => {
         const regex = /【(.*?)】/;

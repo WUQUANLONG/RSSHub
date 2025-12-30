@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import { rootUrl, getSearchParams } from './utils';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 export const handler = async (ctx) => {
     const k = ctx.req.query('k');
@@ -18,6 +19,8 @@ export const handler = async (ctx) => {
     const keyword = k.trim();
 
     const apiUrl = new URL(`api/sw`, rootUrl).href;
+    const ua = getRandomHeaders();
+    const referer = 'https://www.cls.cn/';
 
     const {data: response} = await got(apiUrl, {
         searchParams: getSearchParams({
@@ -29,6 +32,10 @@ export const handler = async (ctx) => {
         }),
         method: 'post',
         body: {"type": "all", "keyword": keyword},
+        headers: {
+            ...ua,
+            'Referer': referer,
+        },
     });
 
     // 查询出来的数据，主要有两类是有价值的，telegram 和 depth
