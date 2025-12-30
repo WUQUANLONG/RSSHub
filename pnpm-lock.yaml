@@ -276,6 +276,9 @@ importers:
       undici:
         specifier: 6.22.0
         version: 6.22.0
+      user-agents:
+        specifier: ^1.1.669
+        version: 1.1.669
       uuid:
         specifier: 13.0.0
         version: 13.0.0
@@ -4369,6 +4372,9 @@ packages:
   lodash.bind@4.2.1:
     resolution: {integrity: sha512-lxdsn7xxlCymgLYo1gGvVrfHmkjDiyqVv62FAeF2i5ta72BipE1SLxw8hPEPLhD4/247Ijw07UQH7Hq/chT5LA==}
 
+  lodash.clonedeep@4.5.0:
+    resolution: {integrity: sha512-H5ZhCF25riFd9uB5UCkVKo61m3S/xZk1x4wA6yp/L3RFP6Z/eHH1ymQcGLo7J3GMPfm0V/7m1tryHuGVxpqEBQ==}
+
   lodash.debounce@4.0.8:
     resolution: {integrity: sha512-FT1yDzDYEoYWhnSGnpE/4Kj1fLZkDFyqRb7fNt6FdYOSxlUWAtp42Eh6Wb0rGIv/m9Bgo7x4GhQbm5Ys4SG5ow==}
 
@@ -5902,6 +5908,9 @@ packages:
 
   url-template@2.0.8:
     resolution: {integrity: sha512-XdVKMF4SJ0nP/O7XIPB0JwAEuT9lDIYnNsK8yGVe43y0AWoKeJNdv3ZNWh7ksJ6KqQFjOO6ox/VEitLnaVNufw==}
+
+  user-agents@1.1.669:
+    resolution: {integrity: sha512-pbIzG+AOqCaIpySKJ4IAm1l0VyE4jMnK4y1thV8lm8PYxI+7X5uWcppOK7zY79TCKKTAnJH3/4gaVIZHsjrmJA==}
 
   utf-8-validate@1.1.0:
     resolution: {integrity: sha512-Qsgu1u2akdyOneurUEVf/tXhkqBQMoE3x0GY5+P7ayPHvVzTqOkkgBhtl26wm6ap10Amhwy0jIhPwMGywx76QQ==}
@@ -10516,6 +10525,8 @@ snapshots:
 
   lodash.bind@4.2.1: {}
 
+  lodash.clonedeep@4.5.0: {}
+
   lodash.debounce@4.0.8: {}
 
   lodash.defaults@4.2.0: {}
@@ -12180,6 +12191,10 @@ snapshots:
       tlds: 1.260.0
 
   url-template@2.0.8: {}
+
+  user-agents@1.1.669:
+    dependencies:
+      lodash.clonedeep: 4.5.0
 
   utf-8-validate@1.1.0:
     dependencies:
