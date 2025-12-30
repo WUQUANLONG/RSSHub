@@ -195,6 +195,7 @@ async function handler(ctx) {
             link: 'https://www.thepaper.cn',
             item: processedItems,
             description: `澎湃新闻 - 搜索 - ${keyword}`,
+            allowEmpty: true,
         };
 
     } catch (error) {
@@ -205,6 +206,7 @@ async function handler(ctx) {
             title: `澎湃新闻 - 搜索 - ${keyword}`,
             link: 'https://www.thepaper.cn',
             item: [],
+            allowEmpty: true,
         };
     }
 }

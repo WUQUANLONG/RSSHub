@@ -211,6 +211,7 @@ async function handler(ctx) {
             link: 'https://www.thepaper.cn',
             item: processedItems,
             description: `澎湃新闻  要闻更新`,
+            allowEmpty: true,
         };
 
     } catch (error) {
@@ -221,6 +222,7 @@ async function handler(ctx) {
             title: `澎湃新闻 - 要闻 - 最新`,
             link: 'https://www.thepaper.cn',
             item: [],
+            allowEmpty: true,
         };
     }
 }

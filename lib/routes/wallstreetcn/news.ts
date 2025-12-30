@@ -148,5 +148,6 @@ async function handler(ctx) {
         item: items,
         itunes_author: '华尔街见闻',
         image: 'https://static.wscn.net/wscn/_static/favicon.png',
+        allowEmpty: true,
     };
 }
