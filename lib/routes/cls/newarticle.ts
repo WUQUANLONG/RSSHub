@@ -74,7 +74,7 @@ export const handler = async (ctx) => {
             guid: `${item.article_id}`,
             id: `${item.article_id}`,
         };
-    });
+    }): [];
 
 
     return {

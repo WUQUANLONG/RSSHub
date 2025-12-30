@@ -102,7 +102,7 @@ async function handler(ctx) {
             pubDate: formattedCtime, // RSS 需要 Date 对象，不是格式化字符串
             category: item.subjects?.map((s) => s.subject_name) || [],
         };
-    });
+    }) : [];
 
     return {
         title: `财联社 - 电报${category === '' ? '' : ` - ${categories[category]}`}`,
