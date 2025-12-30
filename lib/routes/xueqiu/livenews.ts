@@ -1,8 +1,9 @@
 import { Route } from '@/types';
 import got from '@/utils/got';
+import { default as got2 } from 'got';
 import { parseDate } from '@/utils/parse-date';
 import logger from '@/utils/logger';
-import { getDataWithPuppeteer, generateRandomString} from './cookies2';
+import { generateRandomString, getWAFWithCurl} from './cookies2';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 // 导入本地工具
 import { get_md5_1038 } from './md5_utils';
@@ -40,13 +41,10 @@ export const route: Route = {
 async function handler(ctx) {
     const { max_id } = ctx.req.param();
     const rootUrl = 'https://xueqiu.com';
-
     // 使用 Puppeteer 获取完整的 cookies 和 WAF token
-    const { wafToken, cookies, userAgent } = await getDataWithPuppeteer();
-
-    // logger.info('获取到 WAF token:', wafToken.substring(0, 30) + '...');
-    // logger.info('获取到 cookies 数量:', cookies.split(';').length);
-
+    const { wafToken: wafToken, cookies} = await getWAFWithCurl();
+    //console.log('waf', wafToken);
+    //console.log('coo', cookies);
     // 生成随机字符串 (16位)
     const randomString = generateRandomString(16);
 
@@ -57,37 +55,33 @@ async function handler(ctx) {
     } else {
         apiPath += '&max_id=';
     }
-
-    // 生成包含 md5__1038 参数的完整 URL
     const fullUrlWithMd5 = get_md5_1038(
         wafToken,
         randomString,
         apiPath,
         'GET'
     );
+    const cookiesStr = Object.entries(cookies)
+        .map(([key, value]) => `${key}=${value}`)
+        .join('; ');
 
-    logger.info(`生成的完整 URL: ${fullUrlWithMd5}`);
-
-    // 发送请求
     const response = await got({
         method: 'get',
         url: fullUrlWithMd5,
         headers: {
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
+            // 'Accept-Encoding': 'gzip, deflate, br',
+            // 'Accept-Language': 'zh-CN,zh;q=0.9',
             'Connection': 'keep-alive',
-            'Cookie': cookies,
+            'Cookie': cookiesStr,
             'Host': 'xueqiu.com',
             'Referer': rootUrl,
-            'User-Agent': userAgent,
-            'X-Requested-With': 'XMLHttpRequest',
-            'sec-ch-ua': '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
+            // 'User-Agent': userAgent,
+            // 'X-Requested-With': 'XMLHttpRequest',
+            // 'sec-ch-ua': '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+            // 'sec-ch-ua-mobile': '?0',
+            // 'sec-ch-ua-platform': '"macOS"',
         },
-        agent: false,
-        timeout: 30000,
     });
 
     // logger.info('响应状态码:', response.statusCode);

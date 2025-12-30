@@ -1,6 +1,10 @@
 import { getPuppeteerPage } from '@/utils/puppeteer';
 import cache from '@/utils/cache';
 import logger from '@/utils/logger';
+import got from "@/utils/got";
+import { default as got2 } from 'got'; // 原生的 got
+import {get_md5_1038} from "@/routes/xueqiu/md5_utils";
+import {CookieJar} from "tough-cookie";
 /**
  * 使用 Puppeteer 获取完整的数据
  */
@@ -23,7 +27,7 @@ export async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookie
                 browser = result.browser;
 
                 // 设置 User-Agent（如果需要覆盖默认值）
-                const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+                const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
                 await page.setUserAgent(userAgent);
 
                 // 设置额外的头信息
@@ -155,6 +159,116 @@ export async function getDataWithPuppeteer(): Promise<{ wafToken: string; cookie
     );
 }
 
+// 只从首页，获取 waf
+export async function getWAFWithCurl(): Promise<{ wafToken: string, cookies: string}> {
+    const url = 'https://xueqiu.com'; // 替换为你实际的同花顺或雪球目标 URL
+
+    return await cache.tryGet(
+        'xueqiu:curl_waf_data',
+        async () => {
+            try {
+                logger.info('正在发起轻量级请求获取 WAF Token...');
+                // 1. 发起请求
+                const response = await got(url, {
+                    headers: {
+                        'Referer': 'https://xueqiu.com',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    }
+                });
+                // 2. 将 Buffer 转为字符串
+                const html = response.data.toString('utf-8');
+                // 3. 提取 _waf_bd8ce2ce37 (精准匹配)
+                const wafToken = extractSpecificWafToken(html);
+                if (!wafToken) {
+                    logger.warn('未在页面中找到 _waf_bd8ce2ce37，可能 WAF 规则已更新');
+                } else {
+                    logger.info(`成功提取 Token: ${wafToken.substring(0, 10)}...`);
+                }
+                // 4. 返回结构（保持与原 Puppeteer 函数一致，防止业务代码报错）
+
+                // 再请求一次，加上 md5 的值，来获取到 对应的 cookies
+                const randomString = generateRandomString(16);
+                const fullUrlWithMd5 = get_md5_1038(
+                    wafToken,
+                    randomString,
+                    '',
+                    'GET'
+                );
+                const cookieString = await getXueqiuCookies(fullUrlWithMd5);
+
+                // const cookieString = '';
+                return {
+                    wafToken: wafToken || '',
+                    cookies: cookieString || {},
+                };
+            } catch (error) {
+                logger.error('获取 WAF 数据失败:', error.message);
+                throw error;
+            }
+        },
+        1800, // 30分钟缓存
+        false
+    );
+}
+function extractSpecificWafToken(html: string): string {
+    // 方案 1: 匹配 textarea 中的 JSON 字段
+    // 这种写法最稳，因为它限定了必须在 renderData 这个 ID 里面
+    const textareaRegex = /<textarea[^>]*id="renderData"[^>]*>[\s\S]*?"_waf_bd8ce2ce37"\s*:\s*"([^"]+)"[\s\S]*?<\/textarea>/i;
+    const match = html.match(textareaRegex);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    // 方案 2: 如果方案 1 失败，尝试全局直接匹配这个 Key
+    const directRegex = /"_waf_bd8ce2ce37"\s*:\s*"([^"]+)"/;
+    const directMatch = html.match(directRegex);
+    if (directMatch) {
+        return directMatch[1];
+    }
+
+    return '';
+}
+
+async function getXueqiuCookies(url) {
+    // 目标 URL (带 MD5 校验参数)
+    // 创建一个 Cookie 容器，它会自动存储请求过程中所有的 Set-Cookie
+    const cookieJar = new CookieJar();
+
+    const headers = {
+        // 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://xueqiu.com/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    };
+
+    try {
+        // 发起请求
+        const response = await got2(url, {
+            headers,
+            cookieJar,         // 自动处理 Cookie 存储和发送
+            followRedirect: true, // 默认就是 true，会跟随 302 跳转
+            retry: { limit: 0 },  // 调试建议关闭重试
+            timeout: { request: 15000 }
+        });
+
+        // 打印跳转历史（可选）
+        if (response.redirectUrls.length > 0) {
+            console.log(`[*] 经历了 ${response.redirectUrls.length} 次跳转`);
+        }
+
+        // 从 CookieJar 中提取雪球域名的所有 Cookie
+        const cookies = await cookieJar.getCookies('https://xueqiu.com');
+        const allCookies: Record<string, string> = {};
+        cookies.forEach(cookie => {
+            allCookies[cookie.key] = cookie.value;
+        });
+
+        return allCookies;
+
+    } catch (error: any) {
+        console.error(`请求失败: ${error.message}`);
+        return null;
+    }
+}
 /**
  * 从 HTML 中提取 WAF token
  */

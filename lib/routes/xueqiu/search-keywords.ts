@@ -1,8 +1,7 @@
 import { Route } from '@/types';
 import got from '@/utils/got';
 import logger from '@/utils/logger';
-import { getDataWithPuppeteer, generateRandomString, getSearchApiCookies} from './cookies2';
-
+import { generateRandomString, getWAFWithCurl} from './cookies2';
 // 导入本地工具
 import { get_md5_1038 } from './md5_utils';
 import {decodeAndExtractText} from "@/utils/parse-html-content";
@@ -62,8 +61,10 @@ async function searchWithFullSignature(q: string, page: string) {
     const rootUrl = 'https://xueqiu.com';
 
     // 获取 WAF token 和 cookies（使用 livenews 的方法）
-    const { wafToken, cookies, userAgent } = await getDataWithPuppeteer();
-
+    const { wafToken: wafToken, cookies} = await getWAFWithCurl();
+    const cookiesStr = Object.entries(cookies)
+        .map(([key, value]) => `${key}=${value}`)
+        .join('; ');
     // 生成随机字符串
     const randomString = generateRandomString(16);
 
@@ -80,18 +81,25 @@ async function searchWithFullSignature(q: string, page: string) {
         method: 'get',
         url: fullUrlWithMd5,
         headers: {
+            // 'Accept': 'application/json, text/plain, */*',
+            // 'Accept-Encoding': 'gzip, deflate, br',
+            // 'Accept-Language': 'zh-CN,zh;q=0.9',
+            // 'Connection': 'keep-alive',
+            // 'Cookie': cookies,
+            // 'Host': 'xueqiu.com',
+            // 'Referer': `${rootUrl}/k?q=${encodeURIComponent(q)}`,
+            // //'User-Agent': userAgent,
+            // 'X-Requested-With': 'XMLHttpRequest',
+            // 'sec-ch-ua': '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+            // 'sec-ch-ua-mobile': '?0',
+            // 'sec-ch-ua-platform': '"macOS"',
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
+            // 'Accept-Encoding': 'gzip, deflate, br',
+            // 'Accept-Language': 'zh-CN,zh;q=0.9',
             'Connection': 'keep-alive',
-            'Cookie': cookies,
+            'Cookie': cookiesStr,
             'Host': 'xueqiu.com',
             'Referer': `${rootUrl}/k?q=${encodeURIComponent(q)}`,
-            'User-Agent': userAgent,
-            'X-Requested-With': 'XMLHttpRequest',
-            'sec-ch-ua': '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
         },
         timeout: 30000,
     });

@@ -3,7 +3,9 @@ import got from '@/utils/got';
 import queryString from 'query-string';
 import { parseDate } from '@/utils/parse-date';
 import sanitizeHtml from 'sanitize-html';
-import { parseToken } from '@/routes/xueqiu/cookies';
+//import { parseToken } from '@/routes/xueqiu/cookies';
+import { generateRandomString, getWAFWithCurl} from './cookies2';
+import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 
 export const route: Route = {
     path: '/hots',
@@ -30,7 +32,10 @@ export const route: Route = {
 };
 
 async function handler() {
-    const token = await parseToken('https://xueqiu.com');
+    const { wafToken: wafToken, cookies} = await getWAFWithCurl();
+    const cookiesStr = Object.entries(cookies)
+        .map(([key, value]) => `${key}=${value}`)
+        .join('; ');
     const res2 = await got({
         method: 'get',
         url: 'https://xueqiu.com/statuses/hots.json',
@@ -43,7 +48,7 @@ async function handler() {
             meigu: '0',
         }),
         headers: {
-            Cookie: token,
+            Cookie: cookiesStr,
             Referer: 'https://xueqiu.com/',
         },
     });
@@ -55,9 +60,12 @@ async function handler() {
         description: '雪球热门帖子',
         item: data.map((item) => {
             const description = item.text;
+            let content = {};
+            content.content = decodeAndExtractText(description);
+            content.content_images = extractImageUrlsWithCheerio(description);
             return {
                 title: item.title ?? sanitizeHtml(description, { allowedTags: [], allowedAttributes: {} }),
-                description,
+                content,
                 pubDate: parseDate(item.created_at),
                 link: `https://xueqiu.com${item.target}`,
                 author: item.user.screen_name,
