@@ -73,7 +73,7 @@ async function handler(ctx) {
         },
     });
 
-    const items = response.data.data.roll_data.slice(0, limit).map((item) => {
+    const items = Array.isArray(response?.data?.data?.roll_data) ? response.data.data.roll_data.slice(0, limit).map((item) => {
         // 创建格式化后的时间变量，不修改原始对象
         const formattedCtime = formatDate(parseDate(item.ctime * 1000));
         const formattedModifiedTime = item.modified_time

@@ -35,7 +35,8 @@ export const handler = async (ctx) => {
             'Referer': referer,
         },
     });
-    const items = response.data.map((item) => {
+
+    const items = Array.isArray(response?.data)? response.data.map((item) => {
         const regex = /【(.*?)】/;
         let title = item.article_title ? item.article_title : '';
         let content = item.article_brief ? item.article_brief : item.article_title;
