@@ -3,6 +3,7 @@ import got from '@/utils/got';
 import { load } from 'cheerio';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 import iconv from "iconv-lite";
+import { getRandomHeaders } from '@/utils/random-ua';
 
 export const route: Route = {
     path: '/test',
@@ -60,14 +61,18 @@ function extractArticleSimple(html) {
 async function handler() {
     const url = 'https://news.10jqka.com.cn/20251218/c673306913.shtml';
     //const url = 'http://192.168.66.32:5001/debug';
+    const ua = getRandomHeaders();
+
     try {
         // 1. 获取页面
         const response = await got(url, {
             responseType: 'buffer',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                'User-Agent': ua["User-Agent"],
                 'Referer': 'http://news.10jqka.com.cn/',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Sec-Ch-Ua': ua["Sec-Ch-Ua"],
+                'Sec-Ch-Ua-Platform': ua["Sec-Ch-Ua-Platform"],
             },
         });
         //let html = response.text('gbk');
