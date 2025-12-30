@@ -108,5 +108,6 @@ async function handler(ctx) {
         title: `财联社 - 电报${category === '' ? '' : ` - ${categories[category]}`}`,
         link: currentUrl,
         item: items,
+        allowEmpty: true,
     };
 }

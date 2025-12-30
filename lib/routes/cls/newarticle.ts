@@ -82,6 +82,7 @@ export const handler = async (ctx) => {
         description: `话题广场-最新发布文章`,
         link: 'https://www.cls.cn/subject',
         item: items,
+        allowEmpty: true,
     };
 };
 
