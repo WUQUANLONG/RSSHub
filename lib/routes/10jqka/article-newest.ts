@@ -7,6 +7,7 @@ import cache from "@/utils/cache";
 import {formatDate, parseDate} from '@/utils/parse-date';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
 import got from "@/utils/got";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 function extractArticleSimple(html) {
     const $ = load(html);
@@ -134,6 +135,7 @@ export const handler = async (ctx) => {
         items = items.slice(0, MAX_ITEMS);
     }
 
+    const ua = getRandomHeaders();
 
     let processedItems = await Promise.all(
         items.map((hurl) => cache.tryGet(hurl.url, async () => {
@@ -153,10 +155,14 @@ export const handler = async (ctx) => {
                 // const html = response.text('gbk');
                 const response = await got(hurl.url, {
                     responseType: 'buffer',
+                    // headers: {
+                    //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                    //     'Referer': 'http://news.10jqka.com.cn/',
+                    //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    // },
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                        ...ua,
                         'Referer': 'http://news.10jqka.com.cn/',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     },
                 });
                 let html = iconv.decode(response.data, 'gbk');
@@ -178,10 +184,14 @@ export const handler = async (ctx) => {
                 // const html2 = response2.text('gbk');
                 const response2 = await got(commen_url, {
                     responseType: 'buffer',
+                    // headers: {
+                    //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                    //     'Referer': 'http://news.10jqka.com.cn/',
+                    //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    // },
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                        ...ua,
                         'Referer': 'http://news.10jqka.com.cn/',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     },
                 });
                 let html2 = iconv.decode(response2.data, 'gbk');
@@ -211,8 +221,7 @@ export const handler = async (ctx) => {
                 // 返回一个降级的项目
                 return null;
             }
-        }, 5)
-        )
+        }, 5))
     );
     processedItems = processedItems.filter((item) => item !== null);
 

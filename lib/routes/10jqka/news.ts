@@ -6,6 +6,7 @@ import iconv from 'iconv-lite';
 import cache from "@/utils/cache";
 import {formatDate, parseDate} from '@/utils/parse-date';
 import {decodeAndExtractText, extractImageUrlsWithCheerio} from "@/utils/parse-html-content";
+import {getRandomHeaders} from "@/utils/random-ua";
 
 function extractArticleSimple(html) {
     const $ = load(html);
@@ -81,12 +82,17 @@ export const handler = async (ctx) => {
 
     // 返回是 html，获取文章的列表，主要是列表中的 url
     // const response = await request.get(currentUrl, {
+    const ua = getRandomHeaders();
     const response = await got(currentUrl, {
         responseType: 'buffer',
+        // headers: {
+        //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+        //     'Referer': 'http://news.10jqka.com.cn/',
+        //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        // },
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+            ...ua,
             'Referer': 'http://news.10jqka.com.cn/',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
 
@@ -110,7 +116,7 @@ export const handler = async (ctx) => {
                     // const response = await request.get(hurl.url, {
                     //     responseType: 'buffer',
                     //     headers: {
-                    //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
                     //         'Referer': 'http://news.10jqka.com.cn/',
                     //         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     //     },
@@ -120,10 +126,14 @@ export const handler = async (ctx) => {
                     // const html = response.text('gbk');
                     const response = await got(hurl.url, {
                         responseType: 'buffer',
+                        // headers: {
+                        //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                        //     'Referer': 'http://news.10jqka.com.cn/',
+                        //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        // },
                         headers: {
-                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                            ...ua,
                             'Referer': 'http://news.10jqka.com.cn/',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                         },
                     });
 
@@ -147,10 +157,14 @@ export const handler = async (ctx) => {
                     // const html2 = response2.text('gbk');
                     const response2 = await got(commen_url, {
                         responseType: 'buffer',
+                        // headers: {
+                        //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                        //     'Referer': 'http://news.10jqka.com.cn/',
+                        //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        // },
                         headers: {
-                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                            ...ua,
                             'Referer': 'http://news.10jqka.com.cn/',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                         },
                     });
                     let html2 = iconv.decode(response2.data, 'gbk');

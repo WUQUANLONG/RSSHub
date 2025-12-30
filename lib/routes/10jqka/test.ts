@@ -67,12 +67,16 @@ async function handler() {
         // 1. 获取页面
         const response = await got(url, {
             responseType: 'buffer',
+            // headers: {
+            //     'User-Agent': ua["User-Agent"],
+            //     'Referer': 'http://news.10jqka.com.cn/',
+            //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            //     'Sec-Ch-Ua': ua["Sec-Ch-Ua"],
+            //     'Sec-Ch-Ua-Platform': ua["Sec-Ch-Ua-Platform"],
+            // },
             headers: {
-                'User-Agent': ua["User-Agent"],
+                ...ua,
                 'Referer': 'http://news.10jqka.com.cn/',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Sec-Ch-Ua': ua["Sec-Ch-Ua"],
-                'Sec-Ch-Ua-Platform': ua["Sec-Ch-Ua-Platform"],
             },
         });
         //let html = response.text('gbk');
