@@ -83,7 +83,7 @@ export const handler = async (ctx) => {
     // 返回是 html，获取文章的列表，主要是列表中的 url
     // const response = await request.get(currentUrl, {
     const ua = getRandomHeaders();
-    const response = await got(currentUrl, {
+    const response = await request.get(currentUrl, {
         responseType: 'buffer',
         // headers: {
         //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
@@ -91,13 +91,15 @@ export const handler = async (ctx) => {
         //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         // },
         headers: {
-            ...ua,
+            //...ua,
+            'User-Agent': ua['User-Agent'],
             'Referer': 'http://news.10jqka.com.cn/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
 
-    // let html = response.text('gbk');
-    let html = iconv.decode(response.data, 'gbk');
+    let html = response.text('gbk');
+    //let html = iconv.decode(response.data, 'gbk');
     const $ = load(html);
     const hrefs = [];
     $('.content-1200 .arc-title .news-link').each((index, element) => {
@@ -113,32 +115,31 @@ export const handler = async (ctx) => {
         hrefs.map((hurl) => cache.tryGet(hurl.url, async () => {
                 try {
                     // 1. 获取页面
-                    // const response = await request.get(hurl.url, {
-                    //     responseType: 'buffer',
-                    //     headers: {
-                    //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
-                    //         'Referer': 'http://news.10jqka.com.cn/',
-                    //         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    //     },
-                    // });
-                    //
-                    // // 2. 解码 GBK
-                    // const html = response.text('gbk');
-                    const response = await got(hurl.url, {
+                    const response = await request.get(hurl.url, {
                         responseType: 'buffer',
-                        // headers: {
-                        //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
-                        //     'Referer': 'http://news.10jqka.com.cn/',
-                        //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                        // },
                         headers: {
-                            ...ua,
+                            //'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+                            'User-Agent': ua['User-Agent'],
                             'Referer': 'http://news.10jqka.com.cn/',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                         },
                     });
 
-                    // let html = response.text('gbk');
-                    let html = iconv.decode(response.data, 'gbk');
+                    // 2. 解码 GBK
+                    const html = response.text('gbk');
+                    // const response = await got(hurl.url, {
+                    //     responseType: 'buffer',
+                    //     // headers: {
+                    //     //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                    //     //     'Referer': 'http://news.10jqka.com.cn/',
+                    //     //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    //     // },
+                    //     headers: {
+                    //         ...ua,
+                    //         'Referer': 'http://news.10jqka.com.cn/',
+                    //     },
+                    // });
+                    // let html = iconv.decode(response.data, 'gbk');
 
                     // 3. 解析数据
                     const res = extractArticleSimple(html);
@@ -146,28 +147,29 @@ export const handler = async (ctx) => {
                     // 4，计算阅读数据
                     // https://comment.10jqka.com.cn/faceajax.php?type=add&jsoncallback=showFace&faceid=2&seq=673309945
                     const commen_url = `https://comment.10jqka.com.cn/faceajax.php?type=add&jsoncallback=showFace&faceid=2&seq=${hurl.id}`;
-                    // const response2 = await request.get(commen_url, {
-                    //     responseType: 'buffer',
-                    //     headers: {
-                    //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    //         'Referer': 'http://news.10jqka.com.cn/',
-                    //         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    //     },
-                    // });
-                    // const html2 = response2.text('gbk');
-                    const response2 = await got(commen_url, {
+                    const response2 = await request.get(commen_url, {
                         responseType: 'buffer',
-                        // headers: {
-                        //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
-                        //     'Referer': 'http://news.10jqka.com.cn/',
-                        //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                        // },
                         headers: {
-                            ...ua,
+                            //'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'User-Agent': ua['User-Agent'],
                             'Referer': 'http://news.10jqka.com.cn/',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                         },
                     });
-                    let html2 = iconv.decode(response2.data, 'gbk');
+                    const html2 = response2.text('gbk');
+                    // const response2 = await got(commen_url, {
+                    //     responseType: 'buffer',
+                    //     // headers: {
+                    //     //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+                    //     //     'Referer': 'http://news.10jqka.com.cn/',
+                    //     //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    //     // },
+                    //     headers: {
+                    //         ...ua,
+                    //         'Referer': 'http://news.10jqka.com.cn/',
+                    //     },
+                    // });
+                    // let html2 = iconv.decode(response2.data, 'gbk');
                     const jsonMatch = html2.match(/showFace\(({[^}]+})\)/);
                     let view_count = 0;
                     if (jsonMatch && jsonMatch[1]) {

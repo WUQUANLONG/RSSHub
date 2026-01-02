@@ -16,7 +16,8 @@ export const handler = async (ctx) => {
     const currentUrl = new URL('realtimenews.html', rootUrl).href;
 
     const ua = getRandomHeaders();
-    const response = await got(currentUrl, {
+    //const response = await got(currentUrl, {
+    const response = await request.get(currentUrl, {
         responseType: 'buffer',
         // headers: {
         //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
@@ -24,45 +25,51 @@ export const handler = async (ctx) => {
         //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         // },
         headers: {
-            ...ua,
+            //...ua,
+            'User-Agent': ua['User-Agent'],
             'Referer': 'http://news.10jqka.com.cn/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
-    let html = iconv.decode(response.data, 'gbk');
+    //let html = iconv.decode(response.data, 'gbk');
+    let html = response.text('gbk');
 
     const $ = load(html);
 
     const language = $('html').prop('lang');
 
-    // const response2 = await request.get(apiUrl, {
-    //     searchParams: {
-    //         page: 1,
-    //         tag: tag ?? '',
-    //     },
-    //     headers: {
-    //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    //         'Referer': 'http://news.10jqka.com.cn/',
-    //         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    //     },
-    // });
-    //  let resData = response2.json();
-
-    const response2 = await got(apiUrl, {
+    const response2 = await request.get(apiUrl, {
         searchParams: {
             page: 1,
             tag: tag ?? '',
         },
-        // headers: {
-        //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
-        //     'Referer': 'http://news.10jqka.com.cn/',
-        //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        // },
         headers: {
-            ...ua,
+            //...ua,
+            'User-Agent': ua['User-Agent'],
             'Referer': 'http://news.10jqka.com.cn/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         },
     });
-    let resData = response2.data;
+    let resData = response2.json();
+
+    // const response2 = await got(apiUrl, {
+    //     searchParams: {
+    //         page: 1,
+    //         tag: tag ?? '',
+    //     },
+    //     // headers: {
+    //     //     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+    //     //     'Referer': 'http://news.10jqka.com.cn/',
+    //     //     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    //     // },
+    //     headers: {
+    //         //...ua,
+    //         'User-Agent': ua['User-Agent'],
+    //         'Referer': 'http://news.10jqka.com.cn/',
+    //         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    //     },
+    // });
+    // let resData = response2.data;
     //console.log('ssss', response2);
 
 
