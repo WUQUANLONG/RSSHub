@@ -155,14 +155,13 @@ function processApiData(data: any, q: string) {
         // fav_count  retweet_count reply_count like_count  view_count
         // retweet_count  fav_count reply_count like_count view_count
         let metrics = {};
-        // if (item.view_count !== undefined) {
-        //     metrics.view_count = item.view_count;
-        // }
+        if (item.view_count !== undefined) {
+            metrics.view_count = item.view_count;
+        }
         // reply_count
         if (item.like_count !== undefined) {
             metrics.like_count = item.like_count;
         }
-
         if (item.reply_count !== undefined) {
             metrics.comment_count = item.reply_count;
         }
